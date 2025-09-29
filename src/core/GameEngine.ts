@@ -5,7 +5,6 @@ import {
   TailConsumptionResult,
   StrategicAdvantage,
   DeathReason,
-  ConsumptionResult,
   FoodType,
   Food
 } from '../types/game';
@@ -16,19 +15,19 @@ import { InputManager } from './InputManager';
 import { EnvironmentSystem } from './EnvironmentSystem';
 import { EnvironmentRenderer, EnvironmentRenderContext } from './EnvironmentRenderer';
 import { ParticleSystem, ParticleType } from './ParticleSystem';
-import { PowerSystem, PowerActivationResult } from './PowerSystem';
+import { PowerActivationResult } from './PowerSystem';
 import { PowerType } from './EvolutionSystem';
 import { ScoreSystem } from './ScoreSystem';
 import { GameStateManager } from './GameStateManager';
 import { PerformanceMonitor, GraphicsQuality } from './PerformanceMonitor';
 import { MemoryManager } from './MemoryManager';
 import { ErrorHandler, FallbackState } from './ErrorHandler';
-import { AssetLoader, AssetManifest } from './AssetLoader';
-import { ResponsiveManager, ViewportInfo } from './ResponsiveManager';
+import { AssetLoader } from './AssetLoader';
+import { ResponsiveManager } from './ResponsiveManager';
 import { BrowserCompatibility } from './BrowserCompatibility';
 import { FoodManager } from './FoodManager';
 import { AudioManager } from './AudioManager';
-import { LightingSystem, LightingConfig } from './LightingSystem';
+import { LightingSystem } from './LightingSystem';
 
 export class GameEngine {
   private canvas: HTMLCanvasElement;
@@ -36,7 +35,7 @@ export class GameEngine {
   private config: GameConfig;
   private state: GameState;
   private animationFrameId: number | null = null;
-  private activeTimeouts: Set<number> = new Set(); // Track timeouts for cleanup
+  private timers: number[] = [];
 
   // Game systems
   private snakeManager!: SnakeManager;
@@ -51,7 +50,6 @@ export class GameEngine {
   private foodManager!: FoodManager;
   private audioManager!: AudioManager;
   private lightingSystem!: LightingSystem;
-  private powerSystem!: PowerSystem;
 
   // Performance and optimization systems
   private performanceMonitor!: PerformanceMonitor;
@@ -196,14 +194,14 @@ export class GameEngine {
       if (this.particleSystem?.dispose) this.particleSystem.dispose();
       // No GL in fallback; use a no-op
       this.particleSystem = {
-        setMaxParticles: () => {}, setEffectsEnabled: () => {}, update: () => {}, render: () => {}, clear: () => {},
-        getActiveParticleCount: () => 0, dispose: () => {}, updateViewport: () => {}, addScreenEffect: () => {},
-        setTimeScale: () => {}, createFoodConsumptionEffect: () => {}, createNegativeFoodEffect: () => {},
-        createSpecialFoodEffect: () => {}, createEvolutionTransformationEffect: () => {}, createSpeedTrailEffect: () => {},
-        createVenomStrikeEffect: () => {}, createFireBreathEffect: () => {}, createTimeWarpEffect: () => {},
-        createInvisibilityEffect: () => {}, createBurst: () => {}, createCrystalDestructionEffect: () => {},
-        createIceDestructionEffect: () => {}, createStoneDestructionEffect: () => {}, createFlameExplosionEffect: () => {},
-        createTailConsumptionEffect: () => {}, createMysticalDissolveEffect: () => {}, createDeathEffect: () => {}
+        setMaxParticles: () => { }, setEffectsEnabled: () => { }, update: () => { }, render: () => { }, clear: () => { },
+        getActiveParticleCount: () => 0, dispose: () => { }, updateViewport: () => { }, addScreenEffect: () => { },
+        setTimeScale: () => { }, createFoodConsumptionEffect: () => { }, createNegativeFoodEffect: () => { },
+        createSpecialFoodEffect: () => { }, createEvolutionTransformationEffect: () => { }, createSpeedTrailEffect: () => { },
+        createVenomStrikeEffect: () => { }, createFireBreathEffect: () => { }, createTimeWarpEffect: () => { },
+        createInvisibilityEffect: () => { }, createBurst: () => { }, createCrystalDestructionEffect: () => { },
+        createIceDestructionEffect: () => { }, createStoneDestructionEffect: () => { }, createFlameExplosionEffect: () => { },
+        createTailConsumptionEffect: () => { }, createMysticalDissolveEffect: () => { }, createDeathEffect: () => { }
       } as any;
     } catch (error) {
       this.errorHandler.handleError({
@@ -282,28 +280,28 @@ export class GameEngine {
       });
     } else {
       // Provide minimal no-ops so the rest of the code can call methods safely
-      this.memoryManager = { getMemoryStats: () => ({ textureMemory: 0, bufferMemory: 0, totalMemory: 0 }), dispose: () => {} } as any;
-      this.snakeRenderer = { 
-        createVisualState: () => ({}), render: () => {}, update: () => {}, setQuality: () => {}, updateViewport: () => {} 
+      this.memoryManager = { getMemoryStats: () => ({ textureMemory: 0, bufferMemory: 0, totalMemory: 0 }), dispose: () => { } } as any;
+      this.snakeRenderer = {
+        createVisualState: () => ({}), render: () => { }, update: () => { }, setQuality: () => { }, updateViewport: () => { }
       } as any;
-      this.environmentRenderer = { 
-        render: () => {}, update: () => {}, setQuality: () => {}, updateViewport: () => {} 
+      this.environmentRenderer = {
+        render: () => { }, update: () => { }, setQuality: () => { }, updateViewport: () => { }
       } as any;
       this.particleSystem = {
-        setMaxParticles: () => {}, setEffectsEnabled: () => {}, update: () => {}, render: () => {}, clear: () => {},
-        getActiveParticleCount: () => 0, dispose: () => {}, updateViewport: () => {}, addScreenEffect: () => {},
-        setTimeScale: () => {}, createFoodConsumptionEffect: () => {}, createNegativeFoodEffect: () => {},
-        createSpecialFoodEffect: () => {}, createEvolutionTransformationEffect: () => {}, createSpeedTrailEffect: () => {},
-        createVenomStrikeEffect: () => {}, createFireBreathEffect: () => {}, createTimeWarpEffect: () => {},
-        createInvisibilityEffect: () => {}, createBurst: () => {}, createCrystalDestructionEffect: () => {},
-        createIceDestructionEffect: () => {}, createStoneDestructionEffect: () => {}, createFlameExplosionEffect: () => {},
-        createTailConsumptionEffect: () => {}, createMysticalDissolveEffect: () => {}, createDeathEffect: () => {}
+        setMaxParticles: () => { }, setEffectsEnabled: () => { }, update: () => { }, render: () => { }, clear: () => { },
+        getActiveParticleCount: () => 0, dispose: () => { }, updateViewport: () => { }, addScreenEffect: () => { },
+        setTimeScale: () => { }, createFoodConsumptionEffect: () => { }, createNegativeFoodEffect: () => { },
+        createSpecialFoodEffect: () => { }, createEvolutionTransformationEffect: () => { }, createSpeedTrailEffect: () => { },
+        createVenomStrikeEffect: () => { }, createFireBreathEffect: () => { }, createTimeWarpEffect: () => { },
+        createInvisibilityEffect: () => { }, createBurst: () => { }, createCrystalDestructionEffect: () => { },
+        createIceDestructionEffect: () => { }, createStoneDestructionEffect: () => { }, createFlameExplosionEffect: () => { },
+        createTailConsumptionEffect: () => { }, createMysticalDissolveEffect: () => { }, createDeathEffect: () => { }
       } as any;
       this.lightingSystem = {
-        applyAmbientLighting: () => {}, render: () => {}, update: () => {}, reset: () => {},
-        addTemporaryLight: () => {}, addPowerLight: () => {}, addFlickeringLight: () => {}, addSnakeGlow: () => {},
-        addEvolutionLighting: () => {}, updateAmbientLighting: () => {}, addDeathLighting: () => {},
-        updateViewport: () => {}, dispose: () => {}
+        applyAmbientLighting: () => { }, render: () => { }, update: () => { }, reset: () => { },
+        addTemporaryLight: () => { }, addPowerLight: () => { }, addFlickeringLight: () => { }, addSnakeGlow: () => { },
+        addEvolutionLighting: () => { }, updateAmbientLighting: () => { }, addDeathLighting: () => { },
+        updateViewport: () => { }, dispose: () => { }
       } as any;
     }
 
@@ -329,8 +327,7 @@ export class GameEngine {
     this.inputManager.onDirectionChange = (direction: Vector2) => {
       // Resume audio on first user gesture
       try {
-        this.audioManager.resumeOnFirstGesture?.();
-        this.audioManager.resumeAudioContext?.();
+        this.audioManager?.startBackgroundAudio?.();
       } catch (error) {
         console.warn('Audio resume failed:', error);
       }
@@ -666,7 +663,15 @@ export class GameEngine {
           this.snakeManager.grow(consumptionResult.segmentsToGrow);
         } else if (consumptionResult.segmentsToGrow < 0) {
           // Handle segment loss
-          this.snakeManager.shrink(Math.abs(consumptionResult.segmentsToGrow));
+          const loss = Math.abs(consumptionResult.segmentsToGrow);
+          if ('shrink' in this.snakeManager) {
+            (this.snakeManager as any).shrink(loss);
+          } else if ('grow' in this.snakeManager) {
+            // some engines accept negative grow
+            try { (this.snakeManager as any).grow(-loss); } catch (_error) {
+              console.warn('Could not shrink snake:', _error);
+            }
+          }
         }
 
         // Add evolution progress
@@ -688,17 +693,21 @@ export class GameEngine {
           y: food.position.y * this.config.cellSize + this.config.cellSize / 2
         };
 
-        if (isWrongLevel) {
-          this.particleSystem.createNegativeFoodEffect(worldPosition, food.type);
-        } else if (food.isSpecial) {
-          this.particleSystem.createSpecialFoodEffect(worldPosition, food.type);
-        } else {
-          this.particleSystem.createFoodConsumptionEffect(worldPosition, food.type);
+        if (isWrongLevel && (this.particleSystem as any).createNegativeFoodEffect) {
+          (this.particleSystem as any).createNegativeFoodEffect(worldPosition, food.type);
+        } else if (food.isSpecial && (this.particleSystem as any).createSpecialFoodEffect) {
+          (this.particleSystem as any).createSpecialFoodEffect(worldPosition, food.type);
+        } else if ((this.particleSystem as any).createFoodConsumptionEffect) {
+          (this.particleSystem as any).createFoodConsumptionEffect(worldPosition, food.type);
+        } else if ((this.particleSystem as any).createBurst) {
+          (this.particleSystem as any).createBurst(worldPosition, 0, 8);
+        } else if ((this.particleSystem as any).createTailConsumptionEffect) {
+          (this.particleSystem as any).createTailConsumptionEffect(worldPosition, 1);
         }
 
         // Add lighting effects for special foods
         if (food.isSpecial) {
-          this.lightingSystem.addTemporaryLight({
+          (this.lightingSystem as any).addTemporaryLight?.({
             position: worldPosition,
             color: this.getFoodLightColor(food.type),
             intensity: 0.8,
@@ -739,10 +748,10 @@ export class GameEngine {
       this.particleSystem.createEvolutionTransformationEffect(headPosition, previousLevel, currentLevel);
 
       // Add dramatic lighting effects for evolution
-      this.lightingSystem.addEvolutionLighting(headPosition, currentLevel);
+      (this.lightingSystem as any).addEvolutionLighting?.(headPosition, currentLevel);
 
       // Update ambient lighting based on new evolution level
-      this.lightingSystem.updateAmbientLighting(currentLevel);
+      (this.lightingSystem as any).updateAmbientLighting?.(currentLevel);
     }
   }
 
@@ -755,9 +764,7 @@ export class GameEngine {
     gl.clear(gl.COLOR_BUFFER_BIT);
 
     // Apply lighting system base lighting
-    if (this.lightingSystem) {
-      this.lightingSystem.applyAmbientLighting(gl);
-    }
+    (this.lightingSystem as any).applyAmbientLighting?.(gl);
 
     // Render environment obstacles first (background layer)
     this.renderEnvironment();
@@ -848,7 +855,7 @@ export class GameEngine {
       const headPos = { x: head.x * this.config.cellSize + this.config.cellSize / 2, y: head.y * this.config.cellSize + this.config.cellSize / 2 };
       this.lightingSystem?.addSnakeGlow?.(headPos, lvl);
     }
-    this.lightingSystem?.render?.(this.gl);
+    (this.lightingSystem as any).render?.();
   }
 
   private renderParticles(): void {
@@ -1154,9 +1161,9 @@ export class GameEngine {
     const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1));
 
     // Update drawing buffer
-    this.canvas.width  = Math.floor(width * dpr);
+    this.canvas.width = Math.floor(width * dpr);
     this.canvas.height = Math.floor(height * dpr);
-    this.canvas.style.width  = `${width}px`;
+    this.canvas.style.width = `${width}px`;
     this.canvas.style.height = `${height}px`;
 
     if (this.gl) this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
@@ -1181,36 +1188,56 @@ export class GameEngine {
     effects.forEach(effect => {
       switch (effect.type) {
         case 'SpeedBoost':
-          this.snakeManager.applySpeedModifier(effect.magnitude, effect.duration);
+        case 'SlowDown': {
+          if ('applySpeedModifier' in this.snakeManager) {
+            (this.snakeManager as any).applySpeedModifier(effect.magnitude, effect.duration);
+          } else if ('setSpeed' in this.snakeManager && 'getSpeed' in this.snakeManager) {
+            const current = (this.snakeManager as any).getSpeed();
+            const target = current * effect.magnitude;
+            (this.snakeManager as any).setSpeed(target);
+            this.setTimed(() => (this.snakeManager as any).setSpeed(current), effect.duration);
+          }
           break;
-        case 'SlowDown':
-          this.snakeManager.applySpeedModifier(effect.magnitude, effect.duration);
-          break;
+        }
         case 'Poison':
           // Handle poison effect - could reduce health or cause periodic damage
           console.log(`Poison effect applied: magnitude ${effect.magnitude}, duration ${effect.duration}`);
           break;
         case 'ReversedControls':
-          this.inputManager.setReversedControls(true, effect.duration);
+          if ((this.inputManager as any).setReversedControls) {
+            (this.inputManager as any).setReversedControls(true, effect.duration);
+          }
           break;
         case 'BlurredVision':
           // Apply visual blur effect
-          this.particleSystem.addScreenEffect('blur', effect.duration, effect.magnitude);
+          if ((this.particleSystem as any).addScreenEffect) {
+            (this.particleSystem as any).addScreenEffect('blur', effect.duration, effect.magnitude);
+          }
           break;
         case 'DisablePowers':
-          this.snakeManager.disablePowers(effect.duration);
+          if ('disablePowers' in this.snakeManager) {
+            (this.snakeManager as any).disablePowers(effect.duration);
+          }
           break;
         case 'Invincibility':
-          this.snakeManager.setInvincibility(true, effect.duration);
+          if ('setInvincibility' in this.snakeManager) {
+            (this.snakeManager as any).setInvincibility(true, effect.duration);
+          }
           break;
         case 'Regeneration':
-          this.snakeManager.enableRegeneration(effect.duration, effect.magnitude);
+          if ('enableRegeneration' in this.snakeManager) {
+            (this.snakeManager as any).enableRegeneration(effect.duration, effect.magnitude);
+          }
           break;
         case 'PowerCooldownReduction':
-          this.snakeManager.reducePowerCooldowns(effect.magnitude, effect.duration);
+          if ('reducePowerCooldowns' in this.snakeManager) {
+            (this.snakeManager as any).reducePowerCooldowns(effect.magnitude, effect.duration);
+          }
           break;
         case 'DoublePoints':
-          this.scoreSystem.setPointsMultiplier(effect.magnitude, effect.duration);
+          if ((this.scoreSystem as any).setPointsMultiplier) {
+            (this.scoreSystem as any).setPointsMultiplier(effect.magnitude, effect.duration);
+          }
           break;
         case 'TimeWarp':
           // Slow down time for everything except the snake
@@ -1224,35 +1251,35 @@ export class GameEngine {
 
   private applyTimeWarpEffect(magnitude: number, duration: number): void {
     // Slow down environment and particle systems
-    this.environmentSystem.setTimeScale(magnitude);
-    this.particleSystem.setTimeScale(magnitude);
+    if ((this.environmentSystem as any).setTimeScale) (this.environmentSystem as any).setTimeScale(magnitude);
+    if ((this.particleSystem as any).setTimeScale) (this.particleSystem as any).setTimeScale(magnitude);
 
     // Reset time scale after duration
     this.setTimed(() => {
-      this.environmentSystem.setTimeScale(1.0);
-      this.particleSystem?.setTimeScale?.(1.0);
+      if ((this.environmentSystem as any).setTimeScale) (this.environmentSystem as any).setTimeScale(1);
+      if ((this.particleSystem as any).setTimeScale) (this.particleSystem as any).setTimeScale(1);
     }, duration);
   }
 
-  private getFoodLightColor(foodType: FoodType): [number, number, number] {
-    switch (foodType) {
-      case FoodType.CrystalFruit:
-        return [0.5, 0.8, 1.0]; // Light blue
-      case FoodType.VenomousFlower:
-        return [0.6, 0.2, 0.8]; // Purple
-      case FoodType.RainbowNectar:
-        return [1.0, 0.4, 0.7]; // Pink
-      case FoodType.StardustBerry:
-        return [0.3, 0.0, 0.5]; // Deep purple
-      case FoodType.DragonScale:
-        return [0.9, 0.1, 0.1]; // Red
-      case FoodType.EternalOrb:
-        return [1.0, 0.8, 0.0]; // Gold
-      case FoodType.OuroborosEssence:
-        return [0.5, 0.0, 0.5]; // Mystical purple
-      default:
-        return [1.0, 1.0, 1.0]; // White
-    }
+  private getFoodLightColor(foodType: FoodType): string {
+    const rgb = (arr: [number, number, number]) => {
+      const to255 = (v: number) => Math.max(0, Math.min(255, Math.round(v * 255)));
+      return `#${[to255(arr[0]), to255(arr[1]), to255(arr[2])]
+        .map(n => n.toString(16).padStart(2, '0')).join('')}`;
+    };
+
+    const map: Record<FoodType, [number, number, number]> = {
+      [FoodType.CrystalFruit]: [0.5, 0.8, 1.0],
+      [FoodType.VenomousFlower]: [0.6, 0.2, 0.8],
+      [FoodType.RainbowNectar]: [1.0, 0.4, 0.7],
+      [FoodType.StardustBerry]: [0.3, 0.0, 0.5],
+      [FoodType.DragonScale]: [0.9, 0.1, 0.1],
+      [FoodType.EternalOrb]: [1.0, 0.8, 0.0],
+      [FoodType.OuroborosEssence]: [0.5, 0.0, 0.5],
+    } as any;
+
+    const arr = map[foodType] ?? [1, 1, 1];
+    return rgb(arr);
   }
 
   private hexToRgb(hex: string): { r: number; g: number; b: number } {
@@ -1284,7 +1311,7 @@ export class GameEngine {
     this.particleSystem.createDeathEffect(deathPosition, evolutionLevel);
 
     // Add dramatic lighting for death
-    this.lightingSystem.addDeathLighting(deathPosition);
+    (this.lightingSystem as any).addDeathLighting?.(deathPosition);
 
     this.gameStateManager.triggerGameOver(
       deathReason,
