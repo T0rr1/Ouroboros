@@ -345,7 +345,7 @@ export class GameEngine {
     this.inputManager.onDirectionChange = (direction: Vector2) => {
       // Resume audio on first user gesture
       this.audioManager.resumeOnFirstGesture();
-      
+
       if (!this.gameStateManager.isGamePaused() && !this.gameStateManager.isGameOver()) {
         this.snakeManager.queueDirection(direction);
       }
@@ -795,7 +795,7 @@ export class GameEngine {
 
   private renderSnake(): void {
     if (!this.snakeRenderer) return;
-    
+
     const snakeState = this.snakeManager.getSnakeState();
     const evolutionSystem = this.snakeManager.getEvolutionSystem();
 
@@ -858,7 +858,7 @@ export class GameEngine {
 
   private renderLighting(): void {
     if (!this.gl || !this.lightingSystem) return; // ✅ guard
-    
+
     const snakeState = this.snakeManager.getSnakeState();
 
     // Add snake glow for higher evolution levels
@@ -877,7 +877,7 @@ export class GameEngine {
 
   private renderParticles(): void {
     if (!this.particleSystem) return;
-    
+
     // Get camera position (center of canvas for now)
     const cameraPosition: Vector2 = {
       x: this.canvas.width / 2,
@@ -889,7 +889,7 @@ export class GameEngine {
 
   private handlePowerParticleEffects(result: PowerActivationResult): void {
     if (!this.particleSystem) return;
-    
+
     const snakeState = this.snakeManager.getSnakeState();
     const headPosition = {
       x: snakeState.head.x * this.config.cellSize + this.config.cellSize / 2,
@@ -961,7 +961,7 @@ export class GameEngine {
 
   private handlePowerLightingEffects(result: PowerActivationResult): void {
     if (!this.lightingSystem) return;
-    
+
     const snakeState = this.snakeManager.getSnakeState();
     const headPosition = {
       x: snakeState.head.x * this.config.cellSize + this.config.cellSize / 2,
