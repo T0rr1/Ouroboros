@@ -119,19 +119,22 @@ export class GameEngine {
   }
 
   private setupCanvas(): void {
-    const width = this.config.gridWidth * this.config.cellSize;
-    const height = this.config.gridHeight * this.config.cellSize;
+    const cssWidth = this.config.gridWidth * this.config.cellSize;
+    const cssHeight = this.config.gridHeight * this.config.cellSize;
+    const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1));
 
-    this.canvas.width = width;
-    this.canvas.height = height;
-    this.canvas.style.width = `${width}px`;
-    this.canvas.style.height = `${height}px`;
+    this.canvas.style.width = `${cssWidth}px`;
+    this.canvas.style.height = `${cssHeight}px`;
+    this.canvas.width = Math.floor(cssWidth * dpr);
+    this.canvas.height = Math.floor(cssHeight * dpr);
   }
 
   private setupErrorHandling(): void {
     this.errorHandler.setFallbackChangeCallback((state) => {
+      // ✅ capture previous state before overwriting
+      const prev = this.fallbackState;
       this.fallbackState = state;
-      this.handleFallbackStateChange(state);
+      this.handleFallbackStateChange(state, prev);
     });
 
     this.errorHandler.setCriticalErrorCallback((error) => {
@@ -147,19 +150,18 @@ export class GameEngine {
     });
   }
 
-  private handleFallbackStateChange(state: FallbackState): void {
-    if (state.webglFallback && !this.fallbackState.webglFallback) {
+  private handleFallbackStateChange(state: FallbackState, prev: FallbackState): void {
+    if (state.webglFallback && !prev.webglFallback) {
       console.warn('Switching to WebGL fallback mode');
-      // Reinitialize systems with fallback settings
       this.reinitializeWithFallback();
     }
 
-    if (state.audioFallback && !this.fallbackState.audioFallback) {
+    if (state.audioFallback && !prev.audioFallback) {
       console.warn('Audio disabled due to errors');
-      // Disable audio systems
+      // Disable or swap AudioManager to a no-op
     }
 
-    if (state.reducedEffects) {
+    if (state.reducedEffects && !prev.reducedEffects) {
       console.warn('Reducing visual effects for better performance');
       this.currentQuality.effectsEnabled = false;
       this.applyQualitySettings(this.currentQuality);
@@ -180,41 +182,33 @@ export class GameEngine {
   }
 
   private applyQualitySettings(quality: GraphicsQuality): void {
-    if (this.particleSystem) {
-      const maxParticles = quality.particleQuality === 'high' ? 1500 :
-        quality.particleQuality === 'medium' ? 750 : 300;
-      this.particleSystem.setMaxParticles(maxParticles);
-      this.particleSystem.setEffectsEnabled(quality.effectsEnabled);
+    if (this.particleSystem?.setMaxParticles) {
+      const max = quality.particleQuality === 'high' ? 1500 : quality.particleQuality === 'medium' ? 750 : 300;
+      this.particleSystem.setMaxParticles(max);
+      this.particleSystem.setEffectsEnabled?.(quality.effectsEnabled);
     }
-
-    // Apply other quality settings to renderers
-    if (this.snakeRenderer) {
-      this.snakeRenderer.setQuality(quality);
-    }
-
-    if (this.environmentRenderer) {
-      this.environmentRenderer.setQuality(quality);
-    }
+    this.snakeRenderer?.setQuality?.(quality);
+    this.environmentRenderer?.setQuality?.(quality);
   }
 
   private reinitializeWithFallback(): void {
-    // Reinitialize systems with fallback settings
     try {
-      if (this.particleSystem) {
-        this.particleSystem.dispose();
-      }
-
-      // Create fallback particle system
-      this.particleSystem = new ParticleSystem(this.gl!, {
-        maxParticles: 300,
-        enableBatching: false,
-        enableCulling: true,
-        cullDistance: Math.max(this.canvas.width, this.canvas.height)
-      });
+      if (this.particleSystem?.dispose) this.particleSystem.dispose();
+      // No GL in fallback; use a no-op
+      this.particleSystem = {
+        setMaxParticles: () => {}, setEffectsEnabled: () => {}, update: () => {}, render: () => {}, clear: () => {},
+        getActiveParticleCount: () => 0, dispose: () => {}, updateViewport: () => {}, addScreenEffect: () => {},
+        setTimeScale: () => {}, createFoodConsumptionEffect: () => {}, createNegativeFoodEffect: () => {},
+        createSpecialFoodEffect: () => {}, createEvolutionTransformationEffect: () => {}, createSpeedTrailEffect: () => {},
+        createVenomStrikeEffect: () => {}, createFireBreathEffect: () => {}, createTimeWarpEffect: () => {},
+        createInvisibilityEffect: () => {}, createBurst: () => {}, createCrystalDestructionEffect: () => {},
+        createIceDestructionEffect: () => {}, createStoneDestructionEffect: () => {}, createFlameExplosionEffect: () => {},
+        createTailConsumptionEffect: () => {}, createMysticalDissolveEffect: () => {}, createDeathEffect: () => {}
+      } as any;
     } catch (error) {
       this.errorHandler.handleError({
         type: 'general',
-        message: `Fallback initialization failed: ${error}`,
+        message: `Fallback init failed: ${error}`,
         timestamp: Date.now(),
         severity: 'high'
       });
@@ -247,45 +241,29 @@ export class GameEngine {
   }
 
   private initializeGameSystems(): void {
-    // Initialize score system first
+    // Order: systems that don't need GL first
     this.scoreSystem = new ScoreSystem();
-
-    // Initialize game state manager with score system
     this.gameStateManager = new GameStateManager(this.scoreSystem, {
       deathAnimationDuration: 2000,
       pauseOnFocusLoss: true,
       enableAutoSave: true
     });
-
-    // Initialize input manager with canvas for click/touch detection
     this.inputManager = new InputManager(this.canvas);
-
-    // Managers that don't need GL can always be created:
     this.environmentSystem = new EnvironmentSystem(this.config);
     this.foodManager = new FoodManager(this.config);
-    this.audioManager = new AudioManager();
 
-    if (this.gl) { // ✅ only if GL exists
+    // Visual / GL stuff
+    this.visualPatternManager = new VisualPatternManager();
+
+    if (this.gl) {
       // Initialize memory manager only when GL is available
       this.memoryManager = new MemoryManager(this.gl);
 
-      const renderContext: RenderContext = {
-        gl: this.gl,
-        canvas: this.canvas,
-        cellSize: this.config.cellSize,
-        gridWidth: this.config.gridWidth,
-        gridHeight: this.config.gridHeight
-      };
-      this.snakeRenderer = new SnakeRenderer(renderContext);
+      const rc: RenderContext = { gl: this.gl, canvas: this.canvas, cellSize: this.config.cellSize, gridWidth: this.config.gridWidth, gridHeight: this.config.gridHeight };
+      this.snakeRenderer = new SnakeRenderer(rc);
 
-      const envCtx: EnvironmentRenderContext = {
-        gl: this.gl,
-        canvas: this.canvas,
-        cellSize: this.config.cellSize,
-        gridWidth: this.config.gridWidth,
-        gridHeight: this.config.gridHeight
-      };
-      this.environmentRenderer = new EnvironmentRenderer(envCtx);
+      const ec: EnvironmentRenderContext = { gl: this.gl, canvas: this.canvas, cellSize: this.config.cellSize, gridWidth: this.config.gridWidth, gridHeight: this.config.gridHeight };
+      this.environmentRenderer = new EnvironmentRenderer(ec);
 
       this.particleSystem = new ParticleSystem(this.gl, {
         maxParticles: 1500,
@@ -294,49 +272,55 @@ export class GameEngine {
         cullDistance: Math.max(this.canvas.width, this.canvas.height) * 1.5
       });
 
-      // Initialize lighting system
-      const lightingConfig: Partial<LightingConfig> = {
+      this.lightingSystem = new LightingSystem(this.gl, this.canvas, {
         maxLights: 20,
         enableShadows: true,
         shadowQuality: 'medium',
         ambientIntensity: 0.3,
         lightFalloffExponent: 2.0,
         performanceMode: false
-      };
-      this.lightingSystem = new LightingSystem(this.gl, this.canvas, lightingConfig);
+      });
     } else {
-      // Create minimal fallback implementations or set to null
-      // These will be guarded in render methods
-      this.snakeRenderer = null as any;
-      this.environmentRenderer = null as any;
-      this.particleSystem = null as any;
-      this.lightingSystem = null as any;
-      this.memoryManager = null as any;
+      // Provide minimal no-ops so the rest of the code can call methods safely
+      this.memoryManager = { getMemoryStats: () => ({ textureMemory: 0, bufferMemory: 0, totalMemory: 0 }), dispose: () => {} } as any;
+      this.snakeRenderer = { 
+        createVisualState: () => ({}), render: () => {}, update: () => {}, setQuality: () => {}, updateViewport: () => {} 
+      } as any;
+      this.environmentRenderer = { 
+        render: () => {}, update: () => {}, setQuality: () => {}, updateViewport: () => {} 
+      } as any;
+      this.particleSystem = {
+        setMaxParticles: () => {}, setEffectsEnabled: () => {}, update: () => {}, render: () => {}, clear: () => {},
+        getActiveParticleCount: () => 0, dispose: () => {}, updateViewport: () => {}, addScreenEffect: () => {},
+        setTimeScale: () => {}, createFoodConsumptionEffect: () => {}, createNegativeFoodEffect: () => {},
+        createSpecialFoodEffect: () => {}, createEvolutionTransformationEffect: () => {}, createSpeedTrailEffect: () => {},
+        createVenomStrikeEffect: () => {}, createFireBreathEffect: () => {}, createTimeWarpEffect: () => {},
+        createInvisibilityEffect: () => {}, createBurst: () => {}, createCrystalDestructionEffect: () => {},
+        createIceDestructionEffect: () => {}, createStoneDestructionEffect: () => {}, createFlameExplosionEffect: () => {},
+        createTailConsumptionEffect: () => {}, createMysticalDissolveEffect: () => {}, createDeathEffect: () => {}
+      } as any;
+      this.lightingSystem = {
+        applyAmbientLighting: () => {}, render: () => {}, update: () => {}, reset: () => {},
+        addTemporaryLight: () => {}, addPowerLight: () => {}, addFlickeringLight: () => {}, addSnakeGlow: () => {},
+        addEvolutionLighting: () => {}, updateAmbientLighting: () => {}, addDeathLighting: () => {},
+        updateViewport: () => {}, dispose: () => {}
+      } as any;
     }
 
-    // Create snake after systems chosen (it doesn't need GL)
-    const startPosition: Vector2 = {
-      x: Math.floor(this.config.gridWidth / 2),
-      y: Math.floor(this.config.gridHeight / 2)
-    };
+    // Snake last (doesn't need GL)
+    const startPosition = { x: Math.floor(this.config.gridWidth / 2), y: Math.floor(this.config.gridHeight / 2) };
     this.snakeManager = new SnakeManager(this.config, startPosition);
 
-    // Initialize visual systems
-    this.visualPatternManager = new VisualPatternManager();
+    this.audioManager = new AudioManager();
+    this.audioManager.initialize().catch(err => {
+      console.warn('Audio init failed:', err);
+      this.fallbackState.audioFallback = true;
+    });
 
     // Initialize power system
     this.powerSystem = new PowerSystem(this.config);
 
-    // Initialize audio system with user gesture handling
-    this.audioManager.initialize().catch(error => {
-      console.warn('Audio initialization failed:', error);
-      this.fallbackState.audioFallback = true;
-    });
-
-    // Set up input handling
     this.setupInputHandling();
-
-    // Set up game state callbacks
     this.setupGameStateCallbacks();
   }
 
@@ -344,7 +328,12 @@ export class GameEngine {
     // Handle direction changes from input
     this.inputManager.onDirectionChange = (direction: Vector2) => {
       // Resume audio on first user gesture
-      this.audioManager.resumeOnFirstGesture();
+      try {
+        this.audioManager.resumeOnFirstGesture?.();
+        this.audioManager.resumeAudioContext?.();
+      } catch (error) {
+        console.warn('Audio resume failed:', error);
+      }
 
       if (!this.gameStateManager.isGamePaused() && !this.gameStateManager.isGameOver()) {
         this.snakeManager.queueDirection(direction);
@@ -505,15 +494,14 @@ export class GameEngine {
     // Start performance monitoring
     this.performanceMonitor.startFrame();
 
-    const currentTime = performance.now();
-    this.state.deltaTime = currentTime - this.state.lastFrameTime;
-    this.state.lastFrameTime = currentTime;
+    const now = performance.now();
+    let dt = now - this.state.lastFrameTime;
+    this.state.lastFrameTime = now;
 
-    // Clamp huge deltas (tab restore) to avoid spikes
-    this.state.deltaTime = Math.min(this.state.deltaTime, 100); // Max 100ms delta
-
-    // Calculate FPS
-    this.state.fps = 1000 / this.state.deltaTime;
+    dt = Math.min(dt, 1000 / 15); // clamp to ~66ms (15 FPS min)
+    if (dt <= 0) dt = 1000 / this.config.targetFPS;
+    this.state.deltaTime = dt;
+    this.state.fps = 1000 / dt;
 
     try {
       // Update game state manager
@@ -788,33 +776,28 @@ export class GameEngine {
   }
 
   private renderEnvironment(): void {
-    if (!this.environmentRenderer) return;
-    const obstacles = this.environmentSystem.getObstacles();
-    this.environmentRenderer.render(obstacles);
+    this.environmentRenderer?.render?.(this.environmentSystem.getObstacles());
   }
 
   private renderSnake(): void {
-    if (!this.snakeRenderer) return;
-
     const snakeState = this.snakeManager.getSnakeState();
-    const evolutionSystem = this.snakeManager.getEvolutionSystem();
+    const evo = this.snakeManager.getEvolutionSystem();
+    const pattern = this.visualPatternManager.getCurrentPattern(snakeState.evolutionLevel);
 
-    // Get current visual pattern (with transitions)
-    const currentPattern = this.visualPatternManager.getCurrentPattern(snakeState.evolutionLevel);
+    // Safe check for isMoving property
+    const isIdle = typeof (snakeState as any).isMoving === 'boolean' ? !(snakeState as any).isMoving : false;
 
-    // Create visual state for renderer
-    const visualState = this.snakeRenderer.createVisualState(
+    const isTransforming = evo.isTransformationInProgress();
+    const visualState = this.snakeRenderer?.createVisualState?.(
       snakeState.head,
       snakeState.segments,
       snakeState.evolutionLevel,
-      currentPattern,
-      evolutionSystem.isTransformationInProgress(),
-      evolutionSystem.getTransformationProgress(),
-      !snakeState.isMoving // Snake is idle when not moving
+      pattern,
+      isTransforming,
+      evo.getTransformationProgress(),
+      isIdle
     );
-
-    // Render the snake
-    this.snakeRenderer.render(visualState);
+    this.snakeRenderer?.render?.(visualState);
   }
 
   private renderFood(): void {
@@ -836,15 +819,16 @@ export class GameEngine {
     if (!this.gl) return;
     const gl = this.gl;
 
-    const definition = this.foodManager.getFoodDefinition(food.type);
-    if (!definition) return;
+    const def = this.foodManager.getFoodDefinition(food.type);
+    if (!def) return;
 
-    const color = this.hexToRgb(definition.visualData.color);
-    const size = Math.floor(this.config.cellSize * 0.8);           // ✅ ints
+    const color = this.hexToRgb(def.visualData.color);
+    const size = Math.floor(this.config.cellSize * 0.8);
     const x = Math.floor(position.x + (this.config.cellSize - size) / 2);
     const y = Math.floor(position.y + (this.config.cellSize - size) / 2);
 
     const prevViewport = gl.getParameter(gl.VIEWPORT) as Int32Array;
+    const prevClear = gl.getParameter(gl.COLOR_CLEAR_VALUE) as Float32Array;
 
     gl.enable(gl.SCISSOR_TEST);
     gl.scissor(x, this.canvas.height - y - size, size, size);
@@ -853,38 +837,23 @@ export class GameEngine {
     gl.disable(gl.SCISSOR_TEST);
 
     gl.viewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
-    // (Optionally set clearColor back to background here, but render() now does it first)
+    gl.clearColor(prevClear[0], prevClear[1], prevClear[2], prevClear[3]); // ✅ restore
   }
 
   private renderLighting(): void {
-    if (!this.gl || !this.lightingSystem) return; // ✅ guard
-
-    const snakeState = this.snakeManager.getSnakeState();
-
-    // Add snake glow for higher evolution levels
-    if (snakeState.evolutionLevel >= 8) {
-      const headPosition = {
-        x: snakeState.head.x * this.config.cellSize + this.config.cellSize / 2,
-        y: snakeState.head.y * this.config.cellSize + this.config.cellSize / 2
-      };
-
-      this.lightingSystem.addSnakeGlow(headPosition, snakeState.evolutionLevel);
+    if (!this.gl) return;
+    const lvl = this.snakeManager.getSnakeState().evolutionLevel;
+    if (lvl >= 8) {
+      const head = this.snakeManager.getSnakeState().head;
+      const headPos = { x: head.x * this.config.cellSize + this.config.cellSize / 2, y: head.y * this.config.cellSize + this.config.cellSize / 2 };
+      this.lightingSystem?.addSnakeGlow?.(headPos, lvl);
     }
-
-    // Render all lighting effects
-    this.lightingSystem.render(this.gl);
+    this.lightingSystem?.render?.(this.gl);
   }
 
   private renderParticles(): void {
-    if (!this.particleSystem) return;
-
-    // Get camera position (center of canvas for now)
-    const cameraPosition: Vector2 = {
-      x: this.canvas.width / 2,
-      y: this.canvas.height / 2
-    };
-
-    this.particleSystem.render(cameraPosition);
+    const camera = { x: this.canvas.width / 2, y: this.canvas.height / 2 };
+    this.particleSystem?.render?.(camera);
   }
 
   private handlePowerParticleEffects(result: PowerActivationResult): void {
@@ -1065,8 +1034,8 @@ export class GameEngine {
         };
 
         // Stagger the effects slightly for visual appeal
-        this.safeSetTimeout(() => {
-          this.particleSystem.createMysticalDissolveEffect(segmentWorldPos);
+        this.setTimed(() => {
+          this.particleSystem?.createMysticalDissolveEffect?.(segmentWorldPos);
         }, index * 100);
       });
     }
@@ -1081,7 +1050,7 @@ export class GameEngine {
       this.snakeManager.setSpeed(boostedSpeed);
 
       // Reset speed after duration
-      this.safeSetTimeout(() => {
+      this.setTimed(() => {
         this.snakeManager.setSpeed(currentSpeed);
       }, advantage.speedBoost.duration);
 
@@ -1182,29 +1151,20 @@ export class GameEngine {
   }
 
   private handleCanvasResize(width: number, height: number): void {
-    // Update WebGL viewport
-    if (this.gl) {
-      this.gl.viewport(0, 0, width, height);
-    }
+    const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1));
 
-    // Update renderers
-    if (this.snakeRenderer && this.snakeRenderer.updateViewport) {
-      this.snakeRenderer.updateViewport(width, height);
-    }
+    // Update drawing buffer
+    this.canvas.width  = Math.floor(width * dpr);
+    this.canvas.height = Math.floor(height * dpr);
+    this.canvas.style.width  = `${width}px`;
+    this.canvas.style.height = `${height}px`;
 
-    if (this.environmentRenderer && this.environmentRenderer.updateViewport) {
-      this.environmentRenderer.updateViewport(width, height);
-    }
+    if (this.gl) this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
 
-    // Update particle system
-    if (this.particleSystem) {
-      this.particleSystem.updateViewport(width, height);
-    }
-
-    // Update lighting system
-    if (this.lightingSystem) {
-      this.lightingSystem.updateViewport(width, height);
-    }
+    this.snakeRenderer?.updateViewport?.(this.canvas.width, this.canvas.height);
+    this.environmentRenderer?.updateViewport?.(this.canvas.width, this.canvas.height);
+    this.particleSystem?.updateViewport?.(this.canvas.width, this.canvas.height);
+    this.lightingSystem?.updateViewport?.(this.canvas.width, this.canvas.height);
   }
 
   // Helper methods for food and lighting integration
@@ -1268,9 +1228,9 @@ export class GameEngine {
     this.particleSystem.setTimeScale(magnitude);
 
     // Reset time scale after duration
-    this.safeSetTimeout(() => {
+    this.setTimed(() => {
       this.environmentSystem.setTimeScale(1.0);
-      this.particleSystem.setTimeScale(1.0);
+      this.particleSystem?.setTimeScale?.(1.0);
     }, duration);
   }
 
@@ -1296,12 +1256,14 @@ export class GameEngine {
   }
 
   private hexToRgb(hex: string): { r: number; g: number; b: number } {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result ? {
-      r: parseInt(result[1], 16) / 255,
-      g: parseInt(result[2], 16) / 255,
-      b: parseInt(result[3], 16) / 255
-    } : { r: 1, g: 1, b: 1 };
+    let h = hex.trim();
+    if (h[0] === '#') h = h.slice(1);
+    if (h.length === 3) h = h.split('').map(c => c + c).join('');
+    const n = parseInt(h, 16);
+    const r = (n >> 16) & 255;
+    const g = (n >> 8) & 255;
+    const b = n & 255;
+    return { r: r / 255, g: g / 255, b: b / 255 };
   }
 
   private triggerGameOver(deathReason: DeathReason): void {
@@ -1346,22 +1308,20 @@ export class GameEngine {
 
   // Enhanced dispose method
   // Helper method to track timeouts for cleanup
-  private safeSetTimeout(callback: () => void, delay: number): number {
-    const timeoutId = setTimeout(() => {
-      this.activeTimeouts.delete(timeoutId);
-      callback();
-    }, delay);
-    this.activeTimeouts.add(timeoutId);
-    return timeoutId;
+  private timers: number[] = [];
+
+  private setTimed(fn: () => void, ms: number): void {
+    const id = window.setTimeout(() => {
+      this.timers = this.timers.filter(t => t !== id);
+      fn();
+    }, ms);
+    this.timers.push(id);
   }
 
   public dispose(): void {
-    // Stop game loop
     this.stop();
-
-    // Clear all active timeouts to prevent dangling timers
-    this.activeTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
-    this.activeTimeouts.clear();
+    this.timers.forEach(id => clearTimeout(id));
+    this.timers = [];
 
     // Dispose of all systems
     if (this.audioManager) {
