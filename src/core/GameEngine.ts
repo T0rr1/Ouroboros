@@ -37,6 +37,13 @@ export class GameEngine {
   private animationFrameId: number | null = null;
   private timers: number[] = [];
 
+  // === DEBUG ===
+  private __dbgEnabled = true;
+  private __dbgFrames = 0;
+  private __dbgLast = 0;
+  private __dbgIssues: string[] = [];
+  private __dbgCanvas2D?: CanvasRenderingContext2D;
+
   // Game systems
   private snakeManager!: SnakeManager;
   private snakeRenderer!: SnakeRenderer;
@@ -77,6 +84,20 @@ export class GameEngine {
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
+
+    // Initialize debug overlay
+    if (this.__dbgEnabled) {
+      const overlay = document.createElement('canvas');
+      overlay.width = this.canvas.width;
+      overlay.height = this.canvas.height;
+      overlay.style.position = 'absolute';
+      overlay.style.left = this.canvas.style.left || '0';
+      overlay.style.top = this.canvas.style.top || '0';
+      overlay.style.pointerEvents = 'none';
+      overlay.style.zIndex = '9999';
+      this.canvas.parentElement?.appendChild(overlay);
+      this.__dbgCanvas2D = overlay.getContext('2d') || undefined;
+    }
 
     // Initialize browser compatibility first
     this.browserCompatibility = new BrowserCompatibility();
@@ -125,6 +146,10 @@ export class GameEngine {
     this.canvas.style.height = `${cssHeight}px`;
     this.canvas.width = Math.floor(cssWidth * dpr);
     this.canvas.height = Math.floor(cssHeight * dpr);
+
+    // Make canvas focusable for input
+    this.canvas.tabIndex = 1;
+    this.canvas.focus();
   }
 
   private setupErrorHandling(): void {
@@ -243,7 +268,7 @@ export class GameEngine {
     this.scoreSystem = new ScoreSystem();
     this.gameStateManager = new GameStateManager(this.scoreSystem, {
       deathAnimationDuration: 2000,
-      pauseOnFocusLoss: true,
+      pauseOnFocusLoss: false, // Temporarily disabled for debugging
       enableAutoSave: true
     });
     this.inputManager = new InputManager(this.canvas);
@@ -308,6 +333,12 @@ export class GameEngine {
     // Snake last (doesn't need GL)
     const startPosition = { x: Math.floor(this.config.gridWidth / 2), y: Math.floor(this.config.gridHeight / 2) };
     this.snakeManager = new SnakeManager(this.config, startPosition);
+
+    // Ensure the game actually starts moving
+    try {
+      (this.snakeManager as any).setSpeed?.(1); // or your normal cells/sec
+      (this.snakeManager as any).queueDirection?.({ x: 1, y: 0 });
+    } catch { /* ignore */ }
 
     this.audioManager = new AudioManager();
     this.audioManager.initialize().catch(err => {
@@ -486,6 +517,26 @@ export class GameEngine {
 
   private gameLoop = (): void => {
     if (!this.state.isRunning) return;
+
+    // Debug logging for first 180 frames
+    if (this.__dbgEnabled) {
+      if (this.__dbgFrames < 180) {
+        console.log('[DBG] frame', this.__dbgFrames, {
+          isRunning: this.state.isRunning,
+          isPaused: this.gameStateManager?.isGamePaused?.(),
+          isGameOver: this.gameStateManager?.isGameOver?.(),
+          gl: !!this.gl,
+          webglFallback: this.fallbackState?.webglFallback,
+          snake: (() => {
+            try {
+              const s = this.snakeManager?.getSnakeState?.();
+              return { head: s?.head, segs: s?.segments?.length, level: s?.evolutionLevel };
+            } catch { return null; }
+          })()
+        });
+      }
+      this.__dbgFrames++;
+    }
 
     // Start performance monitoring
     this.performanceMonitor.startFrame();
@@ -755,12 +806,22 @@ export class GameEngine {
   }
 
   private render(): void {
-    if (!this.gl) return; // ✅ guard
+    if (!this.gl) {
+      this.__dbgMark('No WebGL context; render() noop');
+      return;
+    }
     const gl = this.gl;
 
-    // Always set the background clear color before clearing
-    gl.clearColor(0.1, 0.1, 0.18, 1.0);
+    // Force a known background every frame
+    gl.clearColor(0.10, 0.10, 0.18, 1.0); // dark indigo
     gl.clear(gl.COLOR_BUFFER_BIT);
+
+    // Draw a 1px "test dot" using scissor so we know GL draws
+    gl.enable(gl.SCISSOR_TEST);
+    gl.scissor(4, 4, 2, 2);
+    gl.clearColor(1, 1, 1, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.disable(gl.SCISSOR_TEST);
 
     // Apply lighting system base lighting
     (this.lightingSystem as any).applyAmbientLighting?.(gl);
@@ -779,6 +840,23 @@ export class GameEngine {
 
     // Render particles on top of everything
     this.renderParticles();
+
+    // Debug HUD overlay
+    if (this.__dbgEnabled && this.__dbgCanvas2D) {
+      const ctx = this.__dbgCanvas2D;
+      ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      ctx.font = '12px monospace';
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      const s = this.snakeManager?.getSnakeState?.();
+      const lines = [
+        `RUN:${this.state.isRunning} PAUSE:${this.gameStateManager?.isGamePaused?.()} OVER:${this.gameStateManager?.isGameOver?.()}`,
+        `GL:${!!this.gl} Fallback:${this.fallbackState?.webglFallback}`,
+        `FPS:${this.state.fps.toFixed(1)} dt:${this.state.deltaTime.toFixed(2)}ms`,
+        s ? `Snake head: (${s.head?.x},${s.head?.y}) segs:${s.segments?.length}` : 'Snake: n/a',
+        `Issues: ${this.__dbgIssues.join(' | ') || 'none'}`
+      ];
+      lines.forEach((t,i)=>ctx.fillText(t, 6, 16 + i*14));
+    }
   }
 
   private renderEnvironment(): void {
@@ -1167,10 +1245,10 @@ export class GameEngine {
 
     if (this.gl) this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
 
-    this.snakeRenderer   && (this.snakeRenderer as any).updateViewport?.(this.canvas.width, this.canvas.height);
+    this.snakeRenderer && (this.snakeRenderer as any).updateViewport?.(this.canvas.width, this.canvas.height);
     this.environmentRenderer && (this.environmentRenderer as any).updateViewport?.(this.canvas.width, this.canvas.height);
-    this.particleSystem  && (this.particleSystem as any).updateViewport?.(this.canvas.width, this.canvas.height);
-    this.lightingSystem  && (this.lightingSystem as any).updateViewport?.(this.canvas.width, this.canvas.height);
+    this.particleSystem && (this.particleSystem as any).updateViewport?.(this.canvas.width, this.canvas.height);
+    this.lightingSystem && (this.lightingSystem as any).updateViewport?.(this.canvas.width, this.canvas.height);
   }
 
   // Helper methods for food and lighting integration
@@ -1333,6 +1411,12 @@ export class GameEngine {
   }
 
   // Helper method to track timeouts for cleanup
+  private __dbgMark(issue: string) {
+    if (!this.__dbgIssues.includes(issue)) {
+      this.__dbgIssues.push(issue);
+      console.warn('[DBG]', issue);
+    }
+  }
 
   private setTimed(fn: () => void, ms: number): void {
     const id = window.setTimeout(() => {
