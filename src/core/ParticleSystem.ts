@@ -590,6 +590,7 @@ export class ParticleSystem {
 
         // Vertex shader for point sprites
         const vertexShaderSource = `
+      precision mediump float;
       attribute vec2 a_position;
       attribute vec4 a_color;
       attribute float a_size;

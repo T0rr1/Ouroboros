@@ -72,6 +72,7 @@ export class SnakeRenderer {
     }
     // Vertex shader for snake segments
     const segmentVertexShaderSource = `
+      precision mediump float;
       attribute vec2 a_position;
       attribute vec2 a_texCoord;
       
@@ -178,6 +179,7 @@ export class SnakeRenderer {
 
     // Head-specific vertex shader
     const headVertexShaderSource = `
+      precision mediump float;
       attribute vec2 a_position;
       attribute vec2 a_texCoord;
       

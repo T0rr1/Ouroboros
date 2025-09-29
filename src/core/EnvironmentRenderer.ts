@@ -37,6 +37,7 @@ export class EnvironmentRenderer {
 
     // Vertex shader source
     const vertexShaderSource = `
+      precision mediump float;
       attribute vec2 a_position;
       attribute vec4 a_color;
       

@@ -25,17 +25,18 @@ function injectDefines(src: string, defines?: ShaderBuildOptions['defines']) {
 }
 
 function ensurePrecision(src: string, fallback: 'lowp'|'mediump'|'highp', isFragment: boolean) {
-  if (!isFragment) return src; // vertex precision is not required
-  // If a #version 300 es fragment already has precision, keep it.
-  if (/#version\s+300\s+es/.test(src) && /precision\s+(lowp|mediump|highp)\s+float\s*;/.test(src)) return src;
-  // WebGL1 fragments MUST have precision for float.
-  if (!/precision\s+(lowp|mediump|highp)\s+float\s*;/.test(src)) {
-    const insertAt = src.match(/^\s*#version[^\n]*\n/)?.[0]?.length ?? 0;
-    const head = src.slice(0, insertAt);
-    const body = src.slice(insertAt);
-    return head + `precision ${fallback} float;\n` + body;
-  }
-  return src;
+  // WebGL1 requires precision qualifiers for both vertex and fragment shaders
+  // If shader already has precision, keep it
+  if (/precision\s+(lowp|mediump|highp)\s+float\s*;/.test(src)) return src;
+  
+  // If it's a WebGL2 shader with #version 300 es, it might not need explicit precision
+  if (/#version\s+300\s+es/.test(src)) return src;
+  
+  // Add precision qualifier for WebGL1 compatibility
+  const insertAt = src.match(/^\s*#version[^\n]*\n/)?.[0]?.length ?? 0;
+  const head = src.slice(0, insertAt);
+  const body = src.slice(insertAt);
+  return head + `precision ${fallback} float;\n` + body;
 }
 
 function toWebGL1Compat(src: string, isFragment: boolean) {
@@ -97,6 +98,9 @@ export function buildProgram(gl: WebGLRenderingContext | WebGL2RenderingContext,
       console.log(`[SHADER] Converted fragment shader for WebGL1`);
     }
   }
+  
+  // Ensure precision for both vertex and fragment shaders in WebGL1
+  v = ensurePrecision(v, opts.forcePrecision ?? 'mediump', false);
   f = ensurePrecision(f, opts.forcePrecision ?? 'mediump', true);
 
   const program = gl.createProgram();
@@ -171,6 +175,7 @@ export function buildProgram(gl: WebGLRenderingContext | WebGL2RenderingContext,
 
 // Minimal test shaders for validation (WebGL1 compatible)
 export const TEST_VERTEX_SHADER = `
+precision mediump float;
 attribute vec2 aPos;
 void main() {
   gl_Position = vec4(aPos, 0.0, 1.0);

@@ -51,22 +51,22 @@ export class LightingSystem {
   private config: LightingConfig;
   private gl: WebGLRenderingContext;
   private canvas: HTMLCanvasElement;
-  
+
   // WebGL resources
   private lightingShaderProgram: WebGLProgram | null = null;
   private lightingFramebuffer: WebGLFramebuffer | null = null;
   private lightingTexture: WebGLTexture | null = null;
   private quadVertexBuffer: WebGLBuffer | null = null;
-  
+
   // Performance tracking
   private frameTime = 0;
   private lastPerformanceCheck = 0;
   private performanceCheckInterval = 1000; // 1 second
-  
+
   constructor(gl: WebGLRenderingContext, canvas: HTMLCanvasElement, config: Partial<LightingConfig> = {}) {
     this.gl = gl;
     this.canvas = canvas;
-    
+
     this.config = {
       maxLights: config.maxLights || 32,
       enableShadows: config.enableShadows !== false,
@@ -75,14 +75,14 @@ export class LightingSystem {
       lightFalloffExponent: config.lightFalloffExponent || 2.0,
       performanceMode: config.performanceMode || false
     };
-    
+
     this.ambientLighting = {
       baseColor: [0.2, 0.25, 0.35], // Mystical blue-gray
       intensity: this.config.ambientIntensity,
       evolutionModifier: 1.0,
       environmentModifier: 1.0
     };
-    
+
     this.initializeWebGL();
   }
 
@@ -94,9 +94,10 @@ export class LightingSystem {
       console.warn('WebGL context not available - skipping lighting system WebGL initialization');
       return;
     }
-    
+
     // Create lighting shader program
     const vertexShaderSource = `
+      precision mediump float;
       attribute vec2 a_position;
       attribute vec2 a_texCoord;
       
@@ -107,7 +108,7 @@ export class LightingSystem {
         v_texCoord = a_texCoord;
       }
     `;
-    
+
     const fragmentShaderSource = `
       precision mediump float;
       
@@ -198,22 +199,22 @@ export class LightingSystem {
         gl_FragColor = vec4(finalColor, 1.0);
       }
     `;
-    
+
     this.lightingShaderProgram = this.createShaderProgram(vertexShaderSource, fragmentShaderSource);
-    
+
     // Create fullscreen quad for lighting pass
     const quadVertices = new Float32Array([
       // Position  // TexCoord
-      -1.0, -1.0,  0.0, 0.0,
-       1.0, -1.0,  1.0, 0.0,
-      -1.0,  1.0,  0.0, 1.0,
-       1.0,  1.0,  1.0, 1.0
+      -1.0, -1.0, 0.0, 0.0,
+      1.0, -1.0, 1.0, 0.0,
+      -1.0, 1.0, 0.0, 1.0,
+      1.0, 1.0, 1.0, 1.0
     ]);
-    
+
     this.quadVertexBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, this.quadVertexBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, quadVertices, gl.STATIC_DRAW);
-    
+
     // Create framebuffer for lighting pass
     this.createLightingFramebuffer();
   }
@@ -225,7 +226,7 @@ export class LightingSystem {
     if (!gl) {
       return null;
     }
-    
+
     try {
       // Use the robust shader compiler with cross-browser compatibility
       return buildProgram(gl, vertexSource, fragmentSource, {
@@ -257,20 +258,20 @@ export class LightingSystem {
     }
 
     const shader = gl.createShader(type);
-    
+
     if (!shader) {
       return null;
     }
-    
+
     gl.shaderSource(shader, source);
     gl.compileShader(shader);
-    
+
     if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
       console.error('Lighting shader compilation failed:', gl.getShaderInfoLog(shader));
       gl.deleteShader(shader);
       return null;
     }
-    
+
     return shader;
   }
 
@@ -282,11 +283,11 @@ export class LightingSystem {
       console.warn('WebGL context not available - skipping lighting framebuffer creation');
       return;
     }
-    
+
     // Create framebuffer
     this.lightingFramebuffer = gl.createFramebuffer();
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.lightingFramebuffer);
-    
+
     // Create texture for lighting
     this.lightingTexture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, this.lightingTexture);
@@ -295,15 +296,15 @@ export class LightingSystem {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    
+
     // Attach texture to framebuffer
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.lightingTexture, 0);
-    
+
     // Check framebuffer completeness
     if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
       console.error('Lighting framebuffer is not complete');
     }
-    
+
     // Unbind framebuffer
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   }
@@ -313,7 +314,7 @@ export class LightingSystem {
       ...light,
       timeAlive: 0
     };
-    
+
     this.lights.set(light.id, fullLight);
     return fullLight;
   }
@@ -336,90 +337,90 @@ export class LightingSystem {
   // Snake evolution-specific lighting methods
   public createSnakeGlow(snakePosition: Vector2, evolutionLevel: number): string {
     const lightId = 'snake_glow';
-    
+
     // Remove existing snake glow
     this.removeLight(lightId);
-    
+
     // Create new glow based on evolution level
     let color: [number, number, number];
     let intensity: number;
     let radius: number;
     let type: LightType;
-    
+
     switch (evolutionLevel) {
       case 1: // Hatchling - no glow
         return lightId;
-        
+
       case 2: // Garden Snake - subtle green glow
         color = [0.3, 0.8, 0.3];
         intensity = 0.3;
         radius = 60;
         type = LightType.Static;
         break;
-        
+
       case 3: // Viper - purple venom glow
         color = [0.6, 0.2, 0.8];
         intensity = 0.4;
         radius = 70;
         type = LightType.Pulsing;
         break;
-        
+
       case 4: // Python - warm amber glow
         color = [0.8, 0.6, 0.2];
         intensity = 0.5;
         radius = 80;
         type = LightType.Glowing;
         break;
-        
+
       case 5: // Cobra - golden hood glow
         color = [1.0, 0.8, 0.3];
         intensity = 0.6;
         radius = 90;
         type = LightType.Pulsing;
         break;
-        
+
       case 6: // Anaconda - blue-green aquatic glow
         color = [0.2, 0.7, 0.9];
         intensity = 0.7;
         radius = 100;
         type = LightType.Glowing;
         break;
-        
+
       case 7: // Rainbow Serpent - shifting rainbow glow
         color = [0.8, 0.5, 1.0];
         intensity = 0.8;
         radius = 120;
         type = LightType.Mystical;
         break;
-        
+
       case 8: // Celestial Serpent - bright white-blue glow
         color = [0.9, 0.9, 1.0];
         intensity = 1.0;
         radius = 150;
         type = LightType.Mystical;
         break;
-        
+
       case 9: // Ancient Dragon Serpent - fiery orange-red glow
         color = [1.0, 0.4, 0.1];
         intensity = 1.2;
         radius = 180;
         type = LightType.Fire;
         break;
-        
+
       case 10: // Ouroboros - golden mystical glow
         color = [1.0, 0.9, 0.3];
         intensity = 1.5;
         radius = 200;
         type = LightType.Mystical;
         break;
-        
+
       default:
         color = [0.5, 0.5, 0.5];
         intensity = 0.2;
         radius = 50;
         type = LightType.Static;
     }
-    
+
     this.addLight({
       id: lightId,
       position: { ...snakePosition },
@@ -433,18 +434,18 @@ export class LightingSystem {
       flickerSpeed: 8.0,
       flickerIntensity: 0.2
     });
-    
+
     return lightId;
   }
 
   public createPowerLight(position: Vector2, powerType: string, duration: number = 2.0): string {
     const lightId = `power_${powerType}_${Date.now()}`;
-    
+
     let color: [number, number, number];
     let intensity: number;
     let radius: number;
     let type: LightType;
-    
+
     switch (powerType) {
       case 'SpeedBoost':
         color = [0.3, 0.8, 1.0];
@@ -452,42 +453,42 @@ export class LightingSystem {
         radius = 100;
         type = LightType.Pulsing;
         break;
-        
+
       case 'VenomStrike':
         color = [0.6, 0.2, 0.8];
         intensity = 1.0;
         radius = 80;
         type = LightType.Flickering;
         break;
-        
+
       case 'FireBreath':
         color = [1.0, 0.3, 0.0];
         intensity = 1.5;
         radius = 150;
         type = LightType.Fire;
         break;
-        
+
       case 'TimeWarp':
         color = [0.8, 0.9, 1.0];
         intensity = 1.2;
         radius = 200;
         type = LightType.Mystical;
         break;
-        
+
       case 'Invisibility':
         color = [1.0, 1.0, 1.0];
         intensity = 0.5;
         radius = 60;
         type = LightType.Flickering;
         break;
-        
+
       default:
         color = [0.8, 0.8, 0.8];
         intensity = 0.6;
         radius = 80;
         type = LightType.Glowing;
     }
-    
+
     this.addLight({
       id: lightId,
       position: { ...position },
@@ -502,18 +503,18 @@ export class LightingSystem {
       flickerSpeed: 12.0,
       flickerIntensity: 0.3
     });
-    
+
     return lightId;
   }
 
   public createEnvironmentalLight(position: Vector2, environmentType: string): string {
     const lightId = `env_${environmentType}_${Date.now()}`;
-    
+
     let color: [number, number, number];
     let intensity: number;
     let radius: number;
     let type: LightType;
-    
+
     switch (environmentType) {
       case 'CrystalFormation':
         color = [0.6, 0.8, 1.0];
@@ -521,35 +522,35 @@ export class LightingSystem {
         radius = 90;
         type = LightType.Glowing;
         break;
-        
+
       case 'FlameGeyser':
         color = [1.0, 0.4, 0.1];
         intensity = 1.0;
         radius = 120;
         type = LightType.Fire;
         break;
-        
+
       case 'MysticalPortal':
         color = [0.8, 0.4, 1.0];
         intensity = 0.8;
         radius = 100;
         type = LightType.Mystical;
         break;
-        
+
       case 'LightningStrike':
         color = [1.0, 1.0, 0.8];
         intensity = 2.0;
         radius = 200;
         type = LightType.Lightning;
         break;
-        
+
       default:
         color = [0.5, 0.5, 0.6];
         intensity = 0.4;
         radius = 70;
         type = LightType.Static;
     }
-    
+
     this.addLight({
       id: lightId,
       position: { ...position },
@@ -564,31 +565,31 @@ export class LightingSystem {
       flickerSpeed: 15.0,
       flickerIntensity: 0.4
     });
-    
+
     return lightId;
   }
 
   public updateAmbientLighting(evolutionLevel: number, environmentType: string = 'default'): void {
     // Adjust ambient lighting based on snake evolution
     this.ambientLighting.evolutionModifier = Math.min(2.0, 1.0 + (evolutionLevel - 1) * 0.1);
-    
+
     // Adjust for environment
     switch (environmentType) {
       case 'mystical_forest':
         this.ambientLighting.environmentModifier = 0.8;
         this.ambientLighting.baseColor = [0.15, 0.25, 0.2]; // Green tint
         break;
-        
+
       case 'ancient_temple':
         this.ambientLighting.environmentModifier = 0.6;
         this.ambientLighting.baseColor = [0.25, 0.2, 0.15]; // Warm stone
         break;
-        
+
       case 'crystal_cavern':
         this.ambientLighting.environmentModifier = 0.9;
         this.ambientLighting.baseColor = [0.2, 0.25, 0.35]; // Cool blue
         break;
-        
+
       default:
         this.ambientLighting.environmentModifier = 1.0;
         this.ambientLighting.baseColor = [0.2, 0.25, 0.35]; // Default mystical
@@ -598,16 +599,16 @@ export class LightingSystem {
   public update(deltaTime: number): void {
     const dt = deltaTime / 1000; // Convert to seconds
     this.frameTime += deltaTime;
-    
+
     // Update lights
     for (const [id, light] of this.lights) {
       if (!light.isActive) continue;
-      
+
       // Update lifetime
       if (light.timeAlive !== undefined) {
         light.timeAlive += dt;
       }
-      
+
       // Check if light should expire
       if (light.lifetime !== undefined && light.lifetime > 0 && light.timeAlive !== undefined) {
         if (light.timeAlive >= light.lifetime) {
@@ -616,14 +617,14 @@ export class LightingSystem {
         }
       }
     }
-    
+
     // Clean up inactive lights
     for (const [lightId, light] of this.lights) {
       if (!light.isActive) {
         this.lights.delete(lightId);
       }
     }
-    
+
     // Performance monitoring
     if (this.frameTime - this.lastPerformanceCheck > this.performanceCheckInterval) {
       this.checkPerformance();
@@ -633,7 +634,7 @@ export class LightingSystem {
 
   private checkPerformance(): void {
     const lightCount = this.lights.size;
-    
+
     // Automatically adjust quality based on light count
     if (lightCount > this.config.maxLights * 0.8 && !this.config.performanceMode) {
       console.warn('High light count detected, enabling performance mode');
@@ -650,23 +651,23 @@ export class LightingSystem {
     if (!this.lightingShaderProgram || !this.quadVertexBuffer) {
       return;
     }
-    
+
     const gl = this.gl;
 
     // Handle test environments where WebGL context might be null
     if (!gl) {
       return;
     }
-    
+
     // Bind lighting framebuffer
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.lightingFramebuffer);
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
-    
+
     // Clear with ambient color
-    const ambientIntensity = this.ambientLighting.intensity * 
-                            this.ambientLighting.evolutionModifier * 
-                            this.ambientLighting.environmentModifier;
-    
+    const ambientIntensity = this.ambientLighting.intensity *
+      this.ambientLighting.evolutionModifier *
+      this.ambientLighting.environmentModifier;
+
     gl.clearColor(
       this.ambientLighting.baseColor[0] * ambientIntensity,
       this.ambientLighting.baseColor[1] * ambientIntensity,
@@ -674,28 +675,28 @@ export class LightingSystem {
       1.0
     );
     gl.clear(gl.COLOR_BUFFER_BIT);
-    
+
     // Use lighting shader
     gl.useProgram(this.lightingShaderProgram);
-    
+
     // Set uniforms
     const resolutionLocation = gl.getUniformLocation(this.lightingShaderProgram, 'u_resolution');
     const ambientColorLocation = gl.getUniformLocation(this.lightingShaderProgram, 'u_ambientColor');
     const ambientIntensityLocation = gl.getUniformLocation(this.lightingShaderProgram, 'u_ambientIntensity');
     const timeLocation = gl.getUniformLocation(this.lightingShaderProgram, 'u_time');
     const lightCountLocation = gl.getUniformLocation(this.lightingShaderProgram, 'u_lightCount');
-    
+
     gl.uniform2f(resolutionLocation, this.canvas.width, this.canvas.height);
     gl.uniform3fv(ambientColorLocation, this.ambientLighting.baseColor);
     gl.uniform1f(ambientIntensityLocation, ambientIntensity);
     gl.uniform1f(timeLocation, time / 1000);
-    
+
     // Prepare light data
     const activeLights = Array.from(this.lights.values()).filter(light => light.isActive);
     const lightCount = Math.min(activeLights.length, this.config.maxLights);
-    
+
     gl.uniform1i(lightCountLocation, lightCount);
-    
+
     if (lightCount > 0) {
       // Prepare light arrays
       const positions = new Float32Array(lightCount * 2);
@@ -707,27 +708,27 @@ export class LightingSystem {
       const flickerIntensities = new Float32Array(lightCount);
       const pulseSpeeds = new Float32Array(lightCount);
       const pulseIntensities = new Float32Array(lightCount);
-      
+
       for (let i = 0; i < lightCount; i++) {
         const light = activeLights[i];
-        
+
         positions[i * 2] = light.position.x;
         positions[i * 2 + 1] = light.position.y;
-        
+
         colors[i * 3] = light.color[0];
         colors[i * 3 + 1] = light.color[1];
         colors[i * 3 + 2] = light.color[2];
-        
+
         intensities[i] = light.intensity;
         radii[i] = light.radius;
         types[i] = this.getLightTypeId(light.type);
-        
+
         flickerSpeeds[i] = light.flickerSpeed || 8.0;
         flickerIntensities[i] = light.flickerIntensity || 0.2;
         pulseSpeeds[i] = light.pulseSpeed || 2.0;
         pulseIntensities[i] = light.pulseIntensity || 0.3;
       }
-      
+
       // Set light uniform arrays
       gl.uniform2fv(gl.getUniformLocation(this.lightingShaderProgram, 'u_lightPositions'), positions);
       gl.uniform3fv(gl.getUniformLocation(this.lightingShaderProgram, 'u_lightColors'), colors);
@@ -739,22 +740,22 @@ export class LightingSystem {
       gl.uniform1fv(gl.getUniformLocation(this.lightingShaderProgram, 'u_lightPulseSpeeds'), pulseSpeeds);
       gl.uniform1fv(gl.getUniformLocation(this.lightingShaderProgram, 'u_lightPulseIntensities'), pulseIntensities);
     }
-    
+
     // Bind quad vertex buffer
     gl.bindBuffer(gl.ARRAY_BUFFER, this.quadVertexBuffer);
-    
+
     const positionLocation = gl.getAttribLocation(this.lightingShaderProgram, 'a_position');
     const texCoordLocation = gl.getAttribLocation(this.lightingShaderProgram, 'a_texCoord');
-    
+
     gl.enableVertexAttribArray(positionLocation);
     gl.enableVertexAttribArray(texCoordLocation);
-    
+
     gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 16, 0);
     gl.vertexAttribPointer(texCoordLocation, 2, gl.FLOAT, false, 16, 8);
-    
+
     // Render fullscreen quad
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-    
+
     // Unbind framebuffer (render to screen)
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   }
@@ -791,7 +792,7 @@ export class LightingSystem {
   public reset(): void {
     // Clear all lights
     this.lights.clear();
-    
+
     // Reset ambient lighting to default
     this.ambientLighting = {
       baseColor: [0.2, 0.2, 0.3],
@@ -799,7 +800,7 @@ export class LightingSystem {
       evolutionModifier: 1.0,
       environmentModifier: 1.0
     };
-    
+
     // Reset frame time
     this.frameTime = 0;
     this.lastPerformanceCheck = 0;
@@ -812,23 +813,23 @@ export class LightingSystem {
     if (!gl) {
       return;
     }
-    
+
     if (this.lightingShaderProgram) {
       gl.deleteProgram(this.lightingShaderProgram);
     }
-    
+
     if (this.lightingFramebuffer) {
       gl.deleteFramebuffer(this.lightingFramebuffer);
     }
-    
+
     if (this.lightingTexture) {
       gl.deleteTexture(this.lightingTexture);
     }
-    
+
     if (this.quadVertexBuffer) {
       gl.deleteBuffer(this.quadVertexBuffer);
     }
-    
+
     this.lights.clear();
   }
 }
