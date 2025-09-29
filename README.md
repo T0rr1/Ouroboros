@@ -1,131 +1,146 @@
 # Ouroboros Snake Game
 
-A modern, web-based evolution of the classic snake game, themed around the mythical Ouroboros serpent. Players evolve through 10 distinct serpent forms, each with unique abilities and gameplay mechanics.
+A modern, feature-rich snake game built with TypeScript, React, and WebGL. This implementation includes advanced features like evolution mechanics, particle systems, dynamic lighting, and immersive audio.
 
-## Project Structure
+## Features
 
-```
-ouroboros-snake-game/
-├── src/
-│   ├── components/          # React components
-│   │   ├── GameCanvas.tsx   # Main game canvas with WebGL
-│   │   └── GameHUD.tsx      # Game UI and status display
-│   ├── core/                # Core game systems
-│   │   ├── GameEngine.ts    # Main game engine with 60 FPS loop
-│   │   └── InputManager.ts  # WASD/Arrow key input handling
-│   ├── types/               # TypeScript type definitions
-│   │   └── game.ts          # Core game interfaces and types
-│   ├── tests/               # Unit tests and verification
-│   │   ├── GameEngine.test.ts
-│   │   ├── InputManager.test.ts
-│   │   └── manual-verification.js
-│   ├── App.tsx              # Main React application
-│   └── main.tsx             # Application entry point
-├── .kiro/specs/             # Feature specifications
-│   └── ouroboros-snake-game/
-│       ├── requirements.md  # Game requirements
-│       ├── design.md        # Technical design
-│       └── tasks.md         # Implementation tasks
-└── Configuration files...
-```
+### Core Gameplay
+- **Classic Snake Mechanics**: Grow by eating food, avoid collisions
+- **Evolution System**: Snake evolves through multiple levels with visual changes
+- **Power System**: Special abilities like speed boost, fire breath, and more
+- **Dynamic Food System**: Multiple food types with different effects
+- **Tail Consumption**: Advanced mechanic allowing strategic gameplay
 
-## Core Foundation (Task 1) - ✅ COMPLETED
+### Visual & Audio
+- **WebGL Rendering**: High-performance graphics with custom shaders
+- **Particle Systems**: Dynamic visual effects for food consumption, evolution, and powers
+- **Dynamic Lighting**: Real-time lighting effects that respond to gameplay
+- **Responsive Design**: Adapts to different screen sizes and orientations
+- **Immersive Audio**: Spatial audio system with dynamic sound effects
 
-### Implemented Features
-
-1. **HTML5 Canvas Setup with React Components**
-   - `GameCanvas` component with WebGL context initialization
-   - `GameHUD` component for game state display
-   - Error handling for WebGL compatibility
-
-2. **WebGL Context and Rendering Pipeline**
-   - WebGL context initialization with fallback detection
-   - Viewport setup for 1750x1225 pixel canvas (50x35 grid at 35px per cell)
-   - Blending enabled for transparency effects
-   - Mystical dark background color
-
-3. **60 FPS Game Loop with Delta Time**
-   - `requestAnimationFrame` based game loop
-   - Delta time calculation for smooth animation
-   - FPS monitoring and display
-   - Pause/resume functionality
-
-4. **Input Handling System**
-   - WASD and Arrow key support
-   - Space bar for pause/resume
-   - Direction vector calculation
-   - Event listener management with cleanup
-
-### Technical Specifications
-
-- **Grid System**: 50x35 cells (1750x1225 pixels)
-- **Target Performance**: 60 FPS
-- **Input Methods**: WASD keys, Arrow keys, Space bar
-- **Rendering**: WebGL with HTML5 Canvas
-- **Framework**: React with TypeScript
-
-### Requirements Satisfied
-
-- ✅ **1.1**: 50x35 cell grid (1750x1225 pixels at 35px per cell)
-- ✅ **1.2**: WASD/Arrow key input handling
-- ✅ **7.1**: 60 FPS performance target
-- ✅ **7.4**: Responsive input with minimal lag
-- ✅ **11.1**: HTML5 Canvas with React framework
-- ✅ **11.2**: WebGL for graphics rendering
+### Technical Features
+- **Performance Optimization**: Memory management and frame rate optimization
+- **Cross-Browser Compatibility**: Works across modern browsers
+- **Touch Input Support**: Mobile-friendly controls
+- **Error Handling**: Robust error management and recovery
+- **Comprehensive Testing**: Full test suite with integration tests
 
 ## Getting Started
 
 ### Prerequisites
-
-- Node.js (v18 or higher)
-- Modern web browser with WebGL support
+- Node.js (v16 or higher)
+- npm or yarn
 
 ### Installation
 
+1. Clone the repository:
+```bash
+git clone https://github.com/T0rr1/Ouroboros.git
+cd Ouroboros
+```
+
+2. Install dependencies:
 ```bash
 npm install
 ```
 
-### Development
-
+3. Start the development server:
 ```bash
 npm run dev
 ```
 
-### Testing
+4. Open your browser and navigate to `http://localhost:5173`
 
-```bash
-npm test
-```
-
-### Build
+### Building for Production
 
 ```bash
 npm run build
 ```
 
+### Running Tests
+
+```bash
+npm test
+```
+
 ## Game Controls
 
-- **WASD** or **Arrow Keys**: Control snake movement
-- **Space**: Pause/Resume game
+### Desktop
+- **Arrow Keys** or **WASD**: Move the snake
+- **Space**: Activate power (when available)
+- **P**: Pause/Resume game
+- **R**: Restart game
 
-## Next Steps
+### Mobile
+- **Touch Controls**: Swipe to change direction
+- **Tap**: Activate power (when available)
 
-The core foundation is complete. Next tasks will implement:
+## Game Mechanics
 
-1. Snake entity and movement system
-2. Collision detection and grid system
-3. Food system and consumption mechanics
-4. Evolution system with 10 levels
-5. Visual effects and particle systems
-6. Audio system
-7. Environmental obstacles and interactions
+### Evolution System
+The snake evolves through multiple levels as it consumes food:
+- **Level 1**: Basic snake
+- **Level 2**: Enhanced speed and visual effects
+- **Level 3**: Unlocks fire breath power
+- **Level 4**: Advanced abilities and visual patterns
+- **Level 5**: Maximum evolution with all powers
 
-## Browser Compatibility
+### Power System
+- **Speed Boost**: Temporary speed increase
+- **Fire Breath**: Destroy obstacles and gain points
+- **Phase**: Pass through walls temporarily
+- **Magnetism**: Attract nearby food
+- **Time Slow**: Slow down time for precise control
 
-- Chrome/Chromium (recommended)
-- Firefox
-- Safari
-- Edge
+### Scoring
+- Points awarded for food consumption
+- Bonus multipliers for evolution level
+- Combo system for consecutive food consumption
+- Survival time bonuses
 
-Requires WebGL support for optimal performance.
+## Architecture
+
+The game is built with a modular architecture:
+
+- **Core Systems**: Game engine, rendering, input management
+- **Game Logic**: Snake mechanics, food system, collision detection
+- **Visual Systems**: Particle effects, lighting, visual patterns
+- **Audio System**: Sound management and spatial audio
+- **Performance**: Memory management and optimization
+
+## Development
+
+### Project Structure
+```
+src/
+├── core/           # Core game systems
+├── components/     # React UI components
+├── tests/          # Test files
+└── types/          # TypeScript type definitions
+```
+
+### Key Technologies
+- **TypeScript**: Type-safe development
+- **React**: UI framework
+- **WebGL**: High-performance graphics
+- **Vite**: Build tool and development server
+- **Vitest**: Testing framework
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature-name`
+3. Make your changes and add tests
+4. Commit your changes: `git commit -m 'Add feature'`
+5. Push to the branch: `git push origin feature-name`
+6. Submit a pull request
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgments
+
+- Inspired by the classic Snake game
+- Built with modern web technologies
+- Designed for performance and extensibility
