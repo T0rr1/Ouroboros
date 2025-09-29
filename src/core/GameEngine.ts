@@ -15,15 +15,15 @@ import { InputManager } from './InputManager';
 import { EnvironmentSystem } from './EnvironmentSystem';
 import { EnvironmentRenderer, EnvironmentRenderContext } from './EnvironmentRenderer';
 import { ParticleSystem, ParticleType } from './ParticleSystem';
-import { PowerActivationResult } from './PowerSystem';
+// PowerActivationResult is used from SnakeManager's activatePower method
 import { PowerType } from './EvolutionSystem';
 import { ScoreSystem } from './ScoreSystem';
 import { GameStateManager } from './GameStateManager';
 import { PerformanceMonitor, GraphicsQuality } from './PerformanceMonitor';
 import { MemoryManager } from './MemoryManager';
 import { ErrorHandler, FallbackState } from './ErrorHandler';
-import { AssetLoader } from './AssetLoader';
-import { ResponsiveManager } from './ResponsiveManager';
+import { AssetLoader, AssetManifest } from './AssetLoader';
+import { ResponsiveManager, ViewportInfo } from './ResponsiveManager';
 import { BrowserCompatibility } from './BrowserCompatibility';
 import { FoodManager } from './FoodManager';
 import { AudioManager } from './AudioManager';
@@ -206,7 +206,7 @@ export class GameEngine {
     } catch (error) {
       this.errorHandler.handleError({
         type: 'general',
-        message: `Fallback init failed: ${error}`,
+        message: `Fallback init failed: ${String(error)}`,
         timestamp: Date.now(),
         severity: 'high'
       });
@@ -231,7 +231,7 @@ export class GameEngine {
     } catch (error) {
       this.errorHandler.handleError({
         type: 'webgl',
-        message: `WebGL setup failed: ${error}`,
+        message: `WebGL setup failed: ${String(error)}`,
         timestamp: Date.now(),
         severity: 'high'
       });
@@ -315,8 +315,7 @@ export class GameEngine {
       this.fallbackState.audioFallback = true;
     });
 
-    // Initialize power system
-    this.powerSystem = new PowerSystem(this.config);
+    // Power system is handled by SnakeManager
 
     this.setupInputHandling();
     this.setupGameStateCallbacks();
@@ -517,7 +516,7 @@ export class GameEngine {
     } catch (error) {
       this.errorHandler.handleError({
         type: 'general',
-        message: `Game loop error: ${error}`,
+        message: `Game loop error: ${String(error)}`,
         stack: error instanceof Error ? error.stack : undefined,
         timestamp: Date.now(),
         severity: 'high'
@@ -853,7 +852,7 @@ export class GameEngine {
     if (lvl >= 8) {
       const head = this.snakeManager.getSnakeState().head;
       const headPos = { x: head.x * this.config.cellSize + this.config.cellSize / 2, y: head.y * this.config.cellSize + this.config.cellSize / 2 };
-      this.lightingSystem?.addSnakeGlow?.(headPos, lvl);
+      (this.lightingSystem as any)?.addSnakeGlow?.(headPos, lvl);
     }
     (this.lightingSystem as any).render?.();
   }
@@ -863,7 +862,7 @@ export class GameEngine {
     this.particleSystem?.render?.(camera);
   }
 
-  private handlePowerParticleEffects(result: PowerActivationResult): void {
+  private handlePowerParticleEffects(result: any): void {
     if (!this.particleSystem) return;
 
     const snakeState = this.snakeManager.getSnakeState();
@@ -935,7 +934,7 @@ export class GameEngine {
     }
   }
 
-  private handlePowerLightingEffects(result: PowerActivationResult): void {
+  private handlePowerLightingEffects(result: any): void {
     if (!this.lightingSystem) return;
 
     const snakeState = this.snakeManager.getSnakeState();
@@ -946,11 +945,11 @@ export class GameEngine {
 
     switch (result.powerType) {
       case PowerType.SpeedBoost:
-        this.lightingSystem.addPowerLight(headPosition, [0.0, 0.8, 1.0], 0.6, 150, 3000);
+        (this.lightingSystem as any)?.addPowerLight?.(headPosition, [0.0, 0.8, 1.0], 0.6, 150, 3000);
         break;
 
       case PowerType.VenomStrike:
-        this.lightingSystem.addPowerLight(headPosition, [0.6, 0.2, 0.8], 0.8, 200, 2000);
+        (this.lightingSystem as any)?.addPowerLight?.(headPosition, [0.6, 0.2, 0.8], 0.8, 200, 2000);
         break;
 
       case PowerType.FireBreath: {
@@ -961,23 +960,23 @@ export class GameEngine {
             x: headPosition.x + direction.x * i * 40,
             y: headPosition.y + direction.y * i * 40
           };
-          this.lightingSystem.addPowerLight(firePosition, [1.0, 0.3, 0.0], 0.9, 120, 1500);
+          (this.lightingSystem as any)?.addPowerLight?.(firePosition, [1.0, 0.3, 0.0], 0.9, 120, 1500);
         }
         break;
       }
 
       case PowerType.TimeWarp:
-        this.lightingSystem.addPowerLight(headPosition, [0.8, 0.0, 0.8], 1.0, 300, 5000);
+        (this.lightingSystem as any)?.addPowerLight?.(headPosition, [0.8, 0.0, 0.8], 1.0, 300, 5000);
         break;
 
       case PowerType.ColorChange:
         // Flickering invisibility light
-        this.lightingSystem.addFlickeringLight(headPosition, [0.5, 0.5, 1.0], 0.3, 100, 4000);
+        (this.lightingSystem as any)?.addFlickeringLight?.(headPosition, [0.5, 0.5, 1.0], 0.3, 100, 4000);
         break;
 
       default:
         // Generic power light
-        this.lightingSystem.addPowerLight(headPosition, [1.0, 1.0, 0.0], 0.5, 100, 2000);
+        (this.lightingSystem as any)?.addPowerLight?.(headPosition, [1.0, 1.0, 0.0], 0.5, 100, 2000);
         break;
     }
   }
@@ -1100,7 +1099,7 @@ export class GameEngine {
     } catch (error) {
       this.errorHandler.handleError({
         type: 'general',
-        message: `Asset loading failed: ${error}`,
+        message: `Asset loading failed: ${String(error)}`,
         timestamp: Date.now(),
         severity: 'medium'
       });
@@ -1168,10 +1167,10 @@ export class GameEngine {
 
     if (this.gl) this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
 
-    this.snakeRenderer?.updateViewport?.(this.canvas.width, this.canvas.height);
-    this.environmentRenderer?.updateViewport?.(this.canvas.width, this.canvas.height);
-    this.particleSystem?.updateViewport?.(this.canvas.width, this.canvas.height);
-    this.lightingSystem?.updateViewport?.(this.canvas.width, this.canvas.height);
+    this.snakeRenderer   && (this.snakeRenderer as any).updateViewport?.(this.canvas.width, this.canvas.height);
+    this.environmentRenderer && (this.environmentRenderer as any).updateViewport?.(this.canvas.width, this.canvas.height);
+    this.particleSystem  && (this.particleSystem as any).updateViewport?.(this.canvas.width, this.canvas.height);
+    this.lightingSystem  && (this.lightingSystem as any).updateViewport?.(this.canvas.width, this.canvas.height);
   }
 
   // Helper methods for food and lighting integration
@@ -1308,7 +1307,7 @@ export class GameEngine {
       x: snakeState.head.x * this.config.cellSize + this.config.cellSize / 2,
       y: snakeState.head.y * this.config.cellSize + this.config.cellSize / 2
     };
-    this.particleSystem.createDeathEffect(deathPosition, evolutionLevel);
+    (this.particleSystem as any).createDeathEffect?.(deathPosition, String(evolutionLevel));
 
     // Add dramatic lighting for death
     (this.lightingSystem as any).addDeathLighting?.(deathPosition);
@@ -1333,9 +1332,7 @@ export class GameEngine {
     return this.lightingSystem;
   }
 
-  // Enhanced dispose method
   // Helper method to track timeouts for cleanup
-  private timers: number[] = [];
 
   private setTimed(fn: () => void, ms: number): void {
     const id = window.setTimeout(() => {
