@@ -1,4 +1,5 @@
 import { Vector2 } from '../types/game';
+import { buildProgram } from './gl/ShaderUtils';
 
 export enum ParticleType {
     // Power-specific particles
@@ -626,27 +627,16 @@ export class ParticleSystem {
       }
     `;
 
-        // Compile and link shaders
-        const vertexShader = this.compileShader(gl.VERTEX_SHADER, vertexShaderSource);
-        const fragmentShader = this.compileShader(gl.FRAGMENT_SHADER, fragmentShaderSource);
-
-        if (!vertexShader || !fragmentShader) {
-            throw new Error('Failed to compile particle shaders');
-        }
-
-        this.shaderProgram = gl.createProgram();
-        if (!this.shaderProgram) {
-            throw new Error('Failed to create particle shader program');
-        }
-
-        gl.attachShader(this.shaderProgram, vertexShader);
-        gl.attachShader(this.shaderProgram, fragmentShader);
-        gl.linkProgram(this.shaderProgram);
-
-        if (!gl.getProgramParameter(this.shaderProgram, gl.LINK_STATUS)) {
-            const error = gl.getProgramInfoLog(this.shaderProgram);
-            gl.deleteProgram(this.shaderProgram);
-            throw new Error(`Failed to link particle shader program: ${error}`);
+        // Compile and link shaders using robust cross-browser compiler
+        try {
+            this.shaderProgram = buildProgram(gl, vertexShaderSource, fragmentShaderSource, {
+                name: 'ParticleSystem',
+                target: 'auto',
+                forcePrecision: 'mediump'
+            });
+        } catch (e: any) {
+            console.error('ParticleSystem shader build failed:', e?.message || e);
+            throw new Error(`Failed to build particle shader program: ${e?.message || e}`);
         }
 
         // Create buffers

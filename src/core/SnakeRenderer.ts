@@ -1,5 +1,6 @@
 import { SnakeSegment, Vector2 } from '../types/game';
 import { VisualPattern } from './EvolutionSystem';
+import { buildProgram } from './gl/ShaderUtils';
 
 export interface RenderContext {
   gl: WebGLRenderingContext;
@@ -334,29 +335,26 @@ export class SnakeRenderer {
       return null;
     }
 
-    const vertexShader = this.compileShader(gl.VERTEX_SHADER, vertexSource);
-    const fragmentShader = this.compileShader(gl.FRAGMENT_SHADER, fragmentSource);
-
-    if (!vertexShader || !fragmentShader) {
+    try {
+      // Use the robust shader compiler with cross-browser compatibility
+      return buildProgram(gl, vertexSource, fragmentSource, {
+        name: 'SnakeRenderer',
+        target: 'auto',
+        forcePrecision: 'mediump'
+      });
+    } catch (e: any) {
+      console.error('SnakeRenderer shader build failed:', e?.message || e);
+      // Surface to error handler for fallback UI
+      if (this.errorHandler) {
+        this.errorHandler.handleError({
+          type: 'webgl',
+          message: 'Snake shader build failed: ' + (e?.message || e),
+          timestamp: Date.now(),
+          severity: 'high',
+        });
+      }
       return null;
     }
-
-    const program = gl.createProgram();
-    if (!program) {
-      return null;
-    }
-
-    gl.attachShader(program, vertexShader);
-    gl.attachShader(program, fragmentShader);
-    gl.linkProgram(program);
-
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-      console.error('Shader program linking failed:', gl.getProgramInfoLog(program));
-      gl.deleteProgram(program);
-      return null;
-    }
-
-    return program;
   }
 
   private compileShader(type: number, source: string): WebGLShader | null {

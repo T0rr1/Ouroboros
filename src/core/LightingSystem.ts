@@ -1,4 +1,5 @@
 import { Vector2 } from '../types/game';
+import { buildProgram } from './gl/ShaderUtils';
 
 export interface Light {
   id: string;
@@ -225,29 +226,26 @@ export class LightingSystem {
       return null;
     }
     
-    const vertexShader = this.compileShader(gl.VERTEX_SHADER, vertexSource);
-    const fragmentShader = this.compileShader(gl.FRAGMENT_SHADER, fragmentSource);
-    
-    if (!vertexShader || !fragmentShader) {
+    try {
+      // Use the robust shader compiler with cross-browser compatibility
+      return buildProgram(gl, vertexSource, fragmentSource, {
+        name: 'LightingSystem',
+        target: 'auto',
+        forcePrecision: 'mediump'
+      });
+    } catch (e: any) {
+      console.error('LightingSystem shader build failed:', e?.message || e);
+      // Surface to error handler for fallback UI
+      if (this.errorHandler) {
+        this.errorHandler.handleError({
+          type: 'webgl',
+          message: 'Lighting shader build failed: ' + (e?.message || e),
+          timestamp: Date.now(),
+          severity: 'high',
+        });
+      }
       return null;
     }
-    
-    const program = gl.createProgram();
-    if (!program) {
-      return null;
-    }
-    
-    gl.attachShader(program, vertexShader);
-    gl.attachShader(program, fragmentShader);
-    gl.linkProgram(program);
-    
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-      console.error('Lighting shader program linking failed:', gl.getProgramInfoLog(program));
-      gl.deleteProgram(program);
-      return null;
-    }
-    
-    return program;
   }
 
   private compileShader(type: number, source: string): WebGLShader | null {

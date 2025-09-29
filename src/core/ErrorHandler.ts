@@ -279,12 +279,15 @@ export class ErrorHandler {
         stencil: false
       };
       
-      let gl = canvas.getContext('webgl', contextOptions) || 
+      // Try WebGL2 first, then fallback to WebGL1
+      let gl = canvas.getContext('webgl2', contextOptions) ||
+               canvas.getContext('webgl', contextOptions) || 
                canvas.getContext('experimental-webgl', contextOptions);
       
       if (!gl) {
         // Try with reduced options
-        gl = canvas.getContext('webgl', { failIfMajorPerformanceCaveat: false }) ||
+        gl = canvas.getContext('webgl2', { failIfMajorPerformanceCaveat: false }) ||
+             canvas.getContext('webgl', { failIfMajorPerformanceCaveat: false }) ||
              canvas.getContext('experimental-webgl', { failIfMajorPerformanceCaveat: false });
       }
       

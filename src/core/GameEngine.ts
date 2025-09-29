@@ -18,6 +18,7 @@ import { ParticleSystem, ParticleType } from './ParticleSystem';
 // PowerActivationResult is used from SnakeManager's activatePower method
 import { PowerType } from './EvolutionSystem';
 import { ScoreSystem } from './ScoreSystem';
+import { buildProgram, TEST_VERTEX_SHADER, TEST_FRAGMENT_SHADER } from './gl/ShaderUtils';
 import { GameStateManager } from './GameStateManager';
 import { PerformanceMonitor, GraphicsQuality } from './PerformanceMonitor';
 import { MemoryManager } from './MemoryManager';
@@ -109,6 +110,11 @@ export class GameEngine {
     // Initialize WebGL context with error handling
     this.gl = this.errorHandler.createSafeWebGLContext(canvas);
     this.fallbackState.webglFallback = !this.gl;
+
+    // Test shader compilation if WebGL is available
+    if (this.gl) {
+      this.validateShaderPipeline();
+    }
 
     // Game configuration - 50x35 grid at 35px per cell = 1750x1225 pixels
     this.config = {
@@ -279,30 +285,72 @@ export class GameEngine {
     this.visualPatternManager = new VisualPatternManager();
 
     if (this.gl) {
-      // Initialize memory manager only when GL is available
-      this.memoryManager = new MemoryManager(this.gl);
+      try {
+        // Initialize memory manager only when GL is available
+        this.memoryManager = new MemoryManager(this.gl);
 
-      const rc: RenderContext = { gl: this.gl, canvas: this.canvas, cellSize: this.config.cellSize, gridWidth: this.config.gridWidth, gridHeight: this.config.gridHeight };
-      this.snakeRenderer = new SnakeRenderer(rc);
+        // Initialize renderers with individual error handling
+        try {
+          const rc: RenderContext = { gl: this.gl, canvas: this.canvas, cellSize: this.config.cellSize, gridWidth: this.config.gridWidth, gridHeight: this.config.gridHeight };
+          this.snakeRenderer = new SnakeRenderer(rc);
+          this.__dbgMark('✓ SnakeRenderer initialized');
+        } catch (error) {
+          this.__dbgMark(`✗ SnakeRenderer failed: ${error}`);
+          console.error('SnakeRenderer initialization failed:', error);
+        }
 
-      const ec: EnvironmentRenderContext = { gl: this.gl, canvas: this.canvas, cellSize: this.config.cellSize, gridWidth: this.config.gridWidth, gridHeight: this.config.gridHeight };
-      this.environmentRenderer = new EnvironmentRenderer(ec);
+        try {
+          const ec: EnvironmentRenderContext = { gl: this.gl, canvas: this.canvas, cellSize: this.config.cellSize, gridWidth: this.config.gridWidth, gridHeight: this.config.gridHeight };
+          this.environmentRenderer = new EnvironmentRenderer(ec);
+          this.__dbgMark('✓ EnvironmentRenderer initialized');
+        } catch (error) {
+          this.__dbgMark(`✗ EnvironmentRenderer failed: ${error}`);
+          console.error('EnvironmentRenderer initialization failed:', error);
+        }
 
-      this.particleSystem = new ParticleSystem(this.gl, {
-        maxParticles: 1500,
-        enableBatching: true,
-        enableCulling: true,
-        cullDistance: Math.max(this.canvas.width, this.canvas.height) * 1.5
-      });
+        try {
+          this.particleSystem = new ParticleSystem(this.gl, {
+            maxParticles: 1500,
+            enableBatching: true,
+            enableCulling: true,
+            cullDistance: Math.max(this.canvas.width, this.canvas.height) * 1.5
+          });
+          this.__dbgMark('✓ ParticleSystem initialized');
+        } catch (error) {
+          this.__dbgMark(`✗ ParticleSystem failed: ${error}`);
+          console.error('ParticleSystem initialization failed:', error);
+        }
 
-      this.lightingSystem = new LightingSystem(this.gl, this.canvas, {
-        maxLights: 20,
-        enableShadows: true,
-        shadowQuality: 'medium',
-        ambientIntensity: 0.3,
-        lightFalloffExponent: 2.0,
-        performanceMode: false
-      });
+        try {
+          this.lightingSystem = new LightingSystem(this.gl, this.canvas, {
+            maxLights: 20,
+            enableShadows: true,
+            shadowQuality: 'medium',
+            ambientIntensity: 0.3,
+            lightFalloffExponent: 2.0,
+            performanceMode: false
+          });
+          this.__dbgMark('✓ LightingSystem initialized');
+        } catch (error) {
+          this.__dbgMark(`✗ LightingSystem failed: ${error}`);
+          console.error('LightingSystem initialization failed:', error);
+        }
+      } catch (error) {
+        this.__dbgMark(`Renderer initialization failed: ${error}`);
+        console.error('[RENDERER] Initialization failed:', error);
+        
+        // Report to error handler and fall back to no-ops
+        this.errorHandler.handleError({
+          type: 'webgl',
+          message: `Renderer initialization failed: ${String(error)}`,
+          timestamp: Date.now(),
+          severity: 'high'
+        });
+        
+        // Set fallback flag and create no-ops
+        this.fallbackState.webglFallback = true;
+        this.createNoOpRenderers();
+      }
     } else {
       // Provide minimal no-ops so the rest of the code can call methods safely
       this.memoryManager = { getMemoryStats: () => ({ textureMemory: 0, bufferMemory: 0, totalMemory: 0 }), dispose: () => { } } as any;
@@ -1416,6 +1464,204 @@ export class GameEngine {
       this.__dbgIssues.push(issue);
       console.warn('[DBG]', issue);
     }
+  }
+
+  private validateShaderPipeline(): void {
+    if (!this.gl) return;
+
+    // Make debugging available globally
+    (window as any).debugShaders = () => {
+      console.log('=== SHADER DEBUG INFO ===');
+      console.log('WebGL Context:', this.gl);
+      console.log('Last Shader Error:', (window as any).lastShaderError);
+      if (this.gl) {
+        console.log('WebGL Version:', this.gl.getParameter(this.gl.VERSION));
+        console.log('Renderer:', this.gl.getParameter(this.gl.RENDERER));
+        console.log('Vendor:', this.gl.getParameter(this.gl.VENDOR));
+      }
+    };
+
+    try {
+      console.log('[SHADER] Starting validation test...');
+      console.log('[SHADER] WebGL context type:', this.gl.constructor.name);
+      console.log('[SHADER] WebGL version:', this.gl.getParameter(this.gl.VERSION));
+      
+      // Use the imported shader utils
+      
+      // Test basic shader compilation
+      const testProgram = buildProgram(this.gl, TEST_VERTEX_SHADER, TEST_FRAGMENT_SHADER, {
+        name: 'ValidationTest',
+        target: 'webgl1'  // Force WebGL1 for the test
+      });
+
+      if (testProgram) {
+        console.log('[SHADER] Validation test passed - shader pipeline is working');
+        this.__dbgMark('✓ Shader pipeline validation passed');
+        this.gl.deleteProgram(testProgram);
+        
+        // Test renderer shader creation
+        this.validateRendererShaders();
+      }
+    } catch (error) {
+      this.__dbgMark(`✗ Shader validation failed: ${error}`);
+      console.error('[SHADER] Validation test failed:', error);
+      
+      // Report to error handler with detailed info
+      this.errorHandler.handleError({
+        type: 'webgl',
+        message: `Shader validation failed: ${String(error)}`,
+        timestamp: Date.now(),
+        severity: 'high'
+      });
+      
+      // Show user-friendly error overlay with detailed info
+      const detailedError = (window as any).lastShaderError ? 
+        `${String(error)}\n\nDetailed Error:\n${JSON.stringify((window as any).lastShaderError, null, 2)}` : 
+        String(error);
+      this.showShaderErrorOverlay(detailedError);
+    }
+  }
+
+  private validateRendererShaders(): void {
+    const rendererTests = [
+      { name: 'SnakeRenderer', renderer: this.snakeRenderer },
+      { name: 'EnvironmentRenderer', renderer: this.environmentRenderer },
+      { name: 'ParticleSystem', renderer: this.particleSystem },
+      { name: 'LightingSystem', renderer: this.lightingSystem }
+    ];
+
+    let failedRenderers = 0;
+    for (const test of rendererTests) {
+      try {
+        if (test.renderer && typeof test.renderer.render === 'function') {
+          this.__dbgMark(`✓ ${test.name} initialized successfully`);
+        } else {
+          this.__dbgMark(`⚠ ${test.name} not initialized or missing render method`);
+        }
+      } catch (error) {
+        failedRenderers++;
+        this.__dbgMark(`✗ ${test.name} failed: ${error}`);
+        console.error(`[SHADER] ${test.name} validation failed:`, error);
+      }
+    }
+
+    if (failedRenderers > 0) {
+      this.__dbgMark(`${failedRenderers} renderer(s) failed initialization`);
+    } else {
+      this.__dbgMark('All renderers initialized successfully');
+    }
+  }
+
+  private showShaderErrorOverlay(error: string): void {
+    // Create a visible error overlay for shader failures
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(220, 53, 69, 0.95);
+      color: white;
+      padding: 20px;
+      border-radius: 8px;
+      font-family: monospace;
+      font-size: 14px;
+      max-width: 90%;
+      max-height: 80%;
+      overflow-y: auto;
+      z-index: 10000;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    `;
+    
+    // Get WebGL context info for debugging
+    const gl = this.gl;
+    let contextInfo = 'No WebGL context';
+    if (gl) {
+      const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+      contextInfo = `
+WebGL Version: ${gl.getParameter(gl.VERSION)}
+Renderer: ${debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : 'Unknown'}
+Vendor: ${debugInfo ? gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) : 'Unknown'}
+Max Vertex Attribs: ${gl.getParameter(gl.MAX_VERTEX_ATTRIBS)}
+Max Texture Size: ${gl.getParameter(gl.MAX_TEXTURE_SIZE)}
+      `.trim();
+    }
+    
+    overlay.innerHTML = `
+      <h3 style="margin: 0 0 10px 0;">🚨 Shader Compilation Failed</h3>
+      <p style="margin: 0 0 10px 0;">Your browser/GPU doesn't support the required shaders.</p>
+      
+      <details style="margin: 10px 0;">
+        <summary style="cursor: pointer;">WebGL Context Info</summary>
+        <pre style="margin: 10px 0; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 4px; overflow-x: auto; font-size: 12px;">${contextInfo}</pre>
+      </details>
+      
+      <details style="margin: 10px 0;">
+        <summary style="cursor: pointer;">Shader Error Details</summary>
+        <pre style="margin: 10px 0; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 4px; overflow-x: auto; font-size: 12px;">${error}</pre>
+      </details>
+      
+      <details style="margin: 10px 0;">
+        <summary style="cursor: pointer;">Debug Console Output</summary>
+        <div id="debug-console" style="margin: 10px 0; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 4px; font-size: 11px; max-height: 200px; overflow-y: auto;">
+          Check browser console (F12) for detailed shader source and compilation errors.
+        </div>
+      </details>
+      
+      <p style="margin: 10px 0 0 0; font-size: 12px;">
+        <strong>Common fixes:</strong><br>
+        • Update your browser to the latest version<br>
+        • Enable hardware acceleration in browser settings<br>
+        • Try a different browser (Chrome, Firefox, Safari)<br>
+        • Update your graphics drivers
+      </p>
+      <button onclick="this.parentElement.remove()" style="
+        background: white;
+        color: #dc3545;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+        margin-top: 10px;
+      ">Close</button>
+    `;
+    
+    document.body.appendChild(overlay);
+    
+    // Auto-remove after 60 seconds
+    setTimeout(() => {
+      if (overlay.parentElement) {
+        overlay.remove();
+      }
+    }, 60000);
+  }
+
+  private createNoOpRenderers(): void {
+    // Provide minimal no-ops so the rest of the code can call methods safely
+    this.memoryManager = { getMemoryStats: () => ({ textureMemory: 0, bufferMemory: 0, totalMemory: 0 }), dispose: () => { } } as any;
+    this.snakeRenderer = {
+      createVisualState: () => ({}), render: () => { }, update: () => { }, setQuality: () => { }, updateViewport: () => { }
+    } as any;
+    this.environmentRenderer = {
+      render: () => { }, update: () => { }, setQuality: () => { }, updateViewport: () => { }
+    } as any;
+    this.particleSystem = {
+      setMaxParticles: () => { }, setEffectsEnabled: () => { }, update: () => { }, render: () => { }, clear: () => { },
+      getActiveParticleCount: () => 0, dispose: () => { }, updateViewport: () => { }, addScreenEffect: () => { },
+      setTimeScale: () => { }, createFoodConsumptionEffect: () => { }, createNegativeFoodEffect: () => { },
+      createSpecialFoodEffect: () => { }, createEvolutionTransformationEffect: () => { }, createSpeedTrailEffect: () => { },
+      createVenomStrikeEffect: () => { }, createFireBreathEffect: () => { }, createTimeWarpEffect: () => { },
+      createInvisibilityEffect: () => { }, createBurst: () => { }, createCrystalDestructionEffect: () => { },
+      createIceDestructionEffect: () => { }, createStoneDestructionEffect: () => { }, createFlameExplosionEffect: () => { },
+      createTailConsumptionEffect: () => { }, createMysticalDissolveEffect: () => { }, createDeathEffect: () => { }
+    } as any;
+    this.lightingSystem = {
+      applyAmbientLighting: () => { }, render: () => { }, update: () => { }, reset: () => { },
+      addTemporaryLight: () => { }, addPowerLight: () => { }, addFlickeringLight: () => { }, addSnakeGlow: () => { },
+      addEvolutionLighting: () => { }, updateAmbientLighting: () => { }, addDeathLighting: () => { },
+      updateViewport: () => { }, dispose: () => { }
+    } as any;
   }
 
   private setTimed(fn: () => void, ms: number): void {

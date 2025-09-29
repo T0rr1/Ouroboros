@@ -1,4 +1,5 @@
 import { Obstacle, ObstacleType, DynamicElement, DynamicElementType, InteractiveFeature, InteractiveFeatureType } from '../types/game';
+import { buildProgram } from './gl/ShaderUtils';
 
 export interface EnvironmentRenderContext {
   gl: WebGLRenderingContext;
@@ -62,28 +63,16 @@ export class EnvironmentRenderer {
       }
     `;
 
-    // Create and compile shaders
-    const vertexShader = this.createShader(gl.VERTEX_SHADER, vertexShaderSource);
-    const fragmentShader = this.createShader(gl.FRAGMENT_SHADER, fragmentShaderSource);
-
-    if (!vertexShader || !fragmentShader) {
-      throw new Error('Failed to create shaders');
-    }
-
-    // Create and link program
-    this.shaderProgram = gl.createProgram();
-    if (!this.shaderProgram) {
-      throw new Error('Failed to create shader program');
-    }
-
-    gl.attachShader(this.shaderProgram, vertexShader);
-    gl.attachShader(this.shaderProgram, fragmentShader);
-    gl.linkProgram(this.shaderProgram);
-
-    if (!gl.getProgramParameter(this.shaderProgram, gl.LINK_STATUS)) {
-      const error = gl.getProgramInfoLog(this.shaderProgram);
-      gl.deleteProgram(this.shaderProgram);
-      throw new Error(`Failed to link shader program: ${error}`);
+    // Create and compile shaders using robust cross-browser compiler
+    try {
+      this.shaderProgram = buildProgram(gl, vertexShaderSource, fragmentShaderSource, {
+        name: 'EnvironmentRenderer',
+        target: 'auto',
+        forcePrecision: 'mediump'
+      });
+    } catch (e: any) {
+      console.error('EnvironmentRenderer shader build failed:', e?.message || e);
+      throw new Error(`Failed to build environment shader program: ${e?.message || e}`);
     }
   }
 
